@@ -100,7 +100,7 @@ const at = (p) => {
   return { pos: new THREE.QuadraticBezierCurve3(a.pos, via, b.pos).getPoint(t), look: a.look.clone().lerp(b.look, t) };
 };
 const state = { p: 0 }, cur = { pos: SHOTS[0].pos.clone(), look: SHOTS[0].look.clone() }, glow = (p, c) => Math.max(0, 1 - Math.abs(p - c) / 0.8);
-w.onFit = (cw, ch) => { if (cw > 800) w.camera.setViewOffset(cw, ch, -cw * 0.17, 0, cw, ch); else w.camera.clearViewOffset(); };
+w.onFit = (cw, ch) => { if (cw > 1024) w.camera.setViewOffset(cw, ch, -cw * 0.17, 0, cw, ch); else w.camera.clearViewOffset(); };
 w.onFit(innerWidth, innerHeight);
 w.ticks.push((t, dt) => {
   const s = at(state.p), k = 1 - Math.exp(-dt * 2.5);

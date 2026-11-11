@@ -20,10 +20,11 @@ const BASS_HITS = { 0: 1, 8: 0.7 };
 let ctx, master, verb, echo, padBus, noiseBuf, started = false, step = 0, nextTime = 0;
 
 function setup() {
-  ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" });
+  const phone = matchMedia("(pointer: coarse)").matches || innerWidth < 900;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 6;
   master = ctx.createGain(); master.gain.value = 0; master.connect(comp).connect(ctx.destination);
-  const len = ctx.sampleRate * 7, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  const len = Math.floor(ctx.sampleRate * (phone ? 3 : 7)), ir = ctx.createBuffer(2, len, ctx.sampleRate);
   for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3; }
   verb = ctx.createConvolver(); verb.buffer = ir;
   const wet = ctx.createGain(); wet.gain.value = 0.8; verb.connect(wet).connect(master);
@@ -95,7 +96,8 @@ function play(s, t) {
 }
 
 function scheduler() {
-  while (nextTime < ctx.currentTime + 0.25) { play(step, nextTime); step++; nextTime += STEP; }
+  if (nextTime < ctx.currentTime) nextTime = ctx.currentTime + 0.05;   // never schedule in the past after a stall
+  while (nextTime < ctx.currentTime + 1.2) { play(step, nextTime); step++; nextTime += STEP; }
 }
 
 function start() {
@@ -103,14 +105,14 @@ function start() {
   if (!ctx) setup();
   started = true;
   nextTime = ctx.currentTime + 0.1; step = 0;
-  setInterval(scheduler, 50);
-  master.gain.setValueAtTime(0, ctx.currentTime); master.gain.linearRampToValueAtTime(0.85, ctx.currentTime + 3);
+  setInterval(scheduler, 250);
+  master.gain.setValueAtTime(0, ctx.currentTime); master.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 3);
   ctx.resume().catch(() => {});
 }
 
 export function setSound(on) {
   localStorage.setItem(KEY, on ? "on" : "off");
-  if (on) { start(); ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.linearRampToValueAtTime(0.85, ctx.currentTime + 1); }
+  if (on) { start(); ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 1); }
   else if (master) { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6); }
 }
 

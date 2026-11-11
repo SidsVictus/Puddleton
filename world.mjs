@@ -123,8 +123,8 @@ export function createWorld(canvas) {
 
   const w = { scene, camera, renderer, islands: [], beans: [], ticks: [], day: 0, setDay(v) { w.target = v; }, target: 0 };
   const fit = () => {
-    const cw = canvas.clientWidth || 1, ch = canvas.clientHeight || 1, px = Math.max(1, Math.round(ch / 400));   // finer pixels: about 400 rows tall
-    renderer.setSize(Math.ceil(cw / px), Math.ceil(ch / px), false); camera.aspect = cw / ch; camera.updateProjectionMatrix(); w.onFit?.(cw, ch);
+    const cw = canvas.clientWidth || 1, ch = canvas.clientHeight || 1, px = Math.max(1, Math.floor(Math.min(cw / 420, ch / 400)));   // at least ~420 x 400 render pixels on any screen
+    renderer.setSize(Math.ceil(cw / px), Math.ceil(ch / px), false); camera.aspect = cw / ch; camera.fov = camera.aspect >= 1 ? 42 : Math.min(72, 42 + (1 - camera.aspect) * 55);   // wider view on portrait screens camera.updateProjectionMatrix(); w.onFit?.(cw, ch);
   };
   new ResizeObserver(fit).observe(canvas); fit();
   const clock = new THREE.Clock(), c1 = new THREE.Color(), c2 = new THREE.Color(), wp = new THREE.Vector3();
