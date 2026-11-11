@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0b24">
+<title>Puddleton</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jersey+20&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
+</head>
+<body class="game">
+<!-- the living painting: a pixel diorama across the top; everything you read sits on solid ink below it -->
+<div class="diorama"><canvas id="world"></canvas></div>
+<header class="hud">
+  <a class="mark" href="index.html">Puddleton <b>After Dark</b></a>
+  <div class="hud-right"><span class="timer" id="timer"></span><button class="iconbtn" id="soundBtn" aria-label="Mute sound"></button><button class="link" data-open-help>Help</button></div>
+</header>
+<div class="phase" id="phaseWrap" hidden><span class="phase-title" id="phaseLabel"></span><span class="eyebrow" id="modeBadge"></span></div>
+
+<main id="home" class="screen active">
+  <div class="cast" id="heroBeans"></div>
+  <h1 class="wordmark">Puddleton<em>after dark</em></h1>
+  <p class="lede">A cute town in the clouds. A dark secret. Someone here wears a tiny fedora.</p>
+  <div class="form">
+    <label class="field"><span class="eyebrow">Your name</span><input id="nameInput" maxlength="16" placeholder="Biscuit" autocomplete="nickname"></label>
+    <button class="btn big" id="createBtn">Create a room</button>
+    <div class="dither"></div>
+    <div class="join"><label class="field"><span class="eyebrow">Or join with a code</span><input id="codeInput" maxlength="6" placeholder="ABC123" autocapitalize="characters"></label><button class="btn alt" id="joinBtn">Join</button></div>
+    <p class="note" id="homeMsg"></p>
+  </div>
+</main>
+
+<main id="choose" class="screen">
+  <h2 class="display">Who tells the story?</h2>
+  <div class="options">
+    <button class="option" data-narrator="bot"><b>The town clock</b><span>The game narrates itself and keeps time. You play too.</span></button>
+    <button class="option" data-narrator="human"><b>Me, the Grandmaster</b><span>You run the night from the narrator's chair. You don't play.</span></button>
+  </div>
+</main>
+
+<main id="lobby" class="screen">
+  <ul class="street" id="roster"></ul>
+  <div class="lobby">
+    <div>
+      <span class="eyebrow">Room code</span>
+      <div class="code" id="roomCode"></div>
+      <button class="link" id="copyBtn">Copy invite link</button>
+      <p class="note">On the island: <span id="countLabel"></span></p>
+    </div>
+    <div id="hostSettings" hidden>
+      <span class="eyebrow">Game mode</span>
+      <div class="modes" id="modePicker"></div>
+      <label class="switch"><input type="checkbox" id="chatToggle" checked><i></i>Town Square group chat</label>
+      <p class="note">Private whispers are always on.</p>
+      <label class="switch secret" id="rigRow" hidden><input type="checkbox" id="rigToggle"><i></i>Director's cut<em>only you can see this</em></label>
+      <button class="btn big" id="startBtn" disabled>Start the night</button>
+      <p class="note" id="startHint"></p>
+    </div>
+    <div id="guestWait" hidden><span class="eyebrow">Game mode</span><p class="display" id="guestMode"></p><p class="note">Waiting for the host to start.</p></div>
+  </div>
+</main>
+
+<main id="shuffle" class="screen">
+  <h2 class="display blink">The Grandmaster is shuffling the cards</h2>
+  <p class="lede">Your secret role arrives in a moment.</p>
+</main>
+
+<main id="game" class="screen">
+  <ul class="street" id="players"></ul>
+  <p class="prompt" id="actionPrompt"></p>
+  <div class="stage">
+    <aside class="identity" id="roleCard"></aside>
+    <section class="story"><p class="story-now" id="storyNow"></p><ol class="story-past" id="feed"></ol></section>
+    <aside class="talk">
+      <nav class="tabs">
+        <button class="tab active" data-tab="square" id="squareTab">Square</button>
+        <button class="tab" data-tab="dms">Whispers<b id="dmBadge"></b></button>
+        <button class="tab" data-tab="director" id="directorTab" hidden>Director</button>
+      </nav>
+      <div class="pane active" id="pane-square">
+        <ul class="msgs" id="chatList"></ul>
+        <form class="composer" id="chatForm"><input id="chatInput" maxlength="500" placeholder="Say something to the town"><button class="link">Send</button></form>
+        <p class="note" id="chatNote"></p>
+      </div>
+      <div class="pane" id="pane-dms">
+        <select id="dmTo" aria-label="Whisper to"></select>
+        <ul class="msgs" id="dmList"></ul>
+        <form class="composer" id="dmForm"><input id="dmInput" maxlength="500" placeholder="Whisper privately"><button class="link">Send</button></form>
+      </div>
+      <div class="pane" id="pane-director"></div>
+    </aside>
+  </div>
+  <button class="btn big float" id="dealBtn" hidden>Deal the cards</button>
+  <button class="btn big float" id="advanceBtn" hidden></button>
+</main>
+
+<div class="curtain" id="reveal" hidden><div class="reveal" id="revealCard"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<!-- HELP: the full story manual (also played as a walkthrough on first launch) -->
+<section id="help" class="curtain book" hidden>
+  <div class="book-inner">
+    <button class="link close" data-close-help>Close</button>
+    <span class="eyebrow">Help</span>
+    <h2 class="display">The Puddleton Fable</h2>
+    <div id="manualPages">
+      <article class="page"><h3><span>Chapter 1</span>Welcome to Puddleton</h3>
+        <p>Puddleton floats above a sea of clouds: jelly-bean folk, drifting lanterns, the smell of fresh muffins. But when the moon comes up, someone puts on a tiny fedora, and the <b>Mafia</b> goes to work.</p>
+        <p>Every game is a fable with two halves that repeat until one side wins: <b>Night</b>, for secret moves, and <b>Day</b>, for talking and voting.</p></article>
+      <article class="page"><h3><span>Chapter 2</span>Opening the door</h3>
+        <p>One friend taps <b>Create a room</b> and gets a six-letter code. Everyone else types it into <b>Join</b>. The creator picks who tells the story: the <b>town clock</b>, which runs everything while the creator plays, or a human <b>Grandmaster</b>, who narrates and does not play.</p>
+        <p>The Grandmaster sees everything, every role and every whisper, just like a narrator should.</p></article>
+      <article class="page"><h3><span>Chapter 3</span>When night falls</h3>
+        <p>At night, players with powers tap a face to use them. Everyone else sleeps. When the sun rises, the story reveals who did not wake up, and what role they had.</p>
+        <p>By day, the whole town talks and votes. The player with the <b>most</b> votes is sent off the island. A tie means nobody goes. You can change your vote or abstain until the day ends.</p></article>
+      <article class="page"><h3><span>Chapter 4</span>The Town wants every Mafia gone</h3>
+        <dl>
+          <dt data-role="villager">Villager</dt><dd>No powers, just a big heart and a sharp vote.</dd>
+          <dt data-role="angel">Angel</dt><dd>Each night, shields one person, even themselves. If anyone tries to kill them, the Angel saves them before they die.</dd>
+          <dt data-role="detective">Detective</dt><dd>Each night, inspects one person and learns "mafia" or "innocent".</dd>
+          <dt data-role="vigilante">Vigilante</dt><dd>Each night, may take a shot at someone. Aim carefully.</dd>
+          <dt data-role="mayor">Mayor</dt><dd>Their day vote counts twice.</dd>
+        </dl></article>
+      <article class="page"><h3><span>Chapter 5</span>The Mafia wants to outnumber the town</h3>
+        <dl>
+          <dt data-role="mafia">Mafia</dt><dd>Each night, picks someone to eliminate. Mafia members know each other.</dd>
+          <dt data-role="godfather">Godfather</dt><dd>The boss: their pick is final, and they look "innocent" to the Detective.</dd>
+          <dt data-role="framer">Framer</dt><dd>Does not kill; frames someone so the Detective sees them as "mafia" that night.</dd>
+        </dl>
+        <p>The Mafia wins when they are at least as many as everyone else, once the Serial Killer is gone.</p></article>
+      <article class="page"><h3><span>Chapter 6</span>The wildcards play for themselves</h3>
+        <dl>
+          <dt data-role="jester">Jester</dt><dd>Wins alone if the town votes them out. Acts suspicious on purpose.</dd>
+          <dt data-role="serialkiller">Serial Killer</dt><dd>Kills someone every night and wins by being the last one standing.</dd>
+        </dl></article>
+      <article class="page"><h3><span>Chapter 7</span>Pick your mode</h3>
+        <dl class="plain">
+          <dt>Classic</dt><dd>Villager, Angel, Detective, Mafia and Godfather. The timeless game.</dd>
+          <dt>Crazy</dt><dd>All 10 roles in play: framed alibis, surprise shots, a Jester and maybe a Serial Killer.</dd>
+          <dt>Gore</dt><dd>Classic roles, but the narration turns cartoon-gruesome.</dd>
+          <dt>Speed</dt><dd>Classic roles with lightning-fast timers. Whole games in minutes.</dd>
+        </dl></article>
+      <article class="page"><h3><span>Chapter 8</span>Talking</h3>
+        <p><b>Whispers</b>, the private messages, are always open: pick a player and write to them. Only the two of you, and the Grandmaster, can read it. The <b>Town Square</b> group chat opens during the day when the host switches it on. The dead tell no tales: once you are out, you can only watch.</p>
+        <p>Find the Mafia, trust no muffin, and have fun. This manual is always available in the Help section.</p></article>
+    </div>
+  </div>
+</section>
+<dialog id="manual"></dialog>
+
+<link rel="modulepreload" href="./engine/engine.mjs">
+<script type="module" src="./play.js"></script>
+</body>
+</html>

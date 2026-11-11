@@ -1,0 +1,14 @@
+{
+  "name": "Puddleton After Dark",
+  "short_name": "Puddleton",
+  "description": "A cute, thrilling pixel Mafia party game.",
+  "start_url": "./play.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#17102a",
+  "theme_color": "#17102a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
