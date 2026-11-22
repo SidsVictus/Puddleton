@@ -1,4 +1,4 @@
-// The first thing on screen: the start screen (the logo, a small studio credit, the loading bar and tips) shows as
+// The first thing on screen: the start screen (the logo, the loading bar and tips) shows as
 // soon as this tiny module and the screen helpers have loaded, while the browser still fetches three.js and the rest
 // of the game. play.js hands it the rest of the start up work with begin(tasks) and waits for `started`.
 import { showLoading } from "./screens/loading.mjs";
@@ -16,4 +16,4 @@ export const started = showLoading(async (report) => {
   const next = () => [...left].find((t) => t.label)?.label;
   report(done / total, next());
   await Promise.all(tasks.map(async (t) => { await t.run(); left.delete(t); done += t.weight ?? 1; report(done / total, next()); }));
-}, { label: "Loading the island", credit: true });
+}, { label: "Loading the island" });

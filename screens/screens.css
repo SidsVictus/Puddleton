@@ -216,7 +216,6 @@ html[data-pad-contrast="high"] .scr-list > li { border-bottom-color: #8f86c0; }
 .scr-load-logo { display: block; width: min(300px, 74vw); margin-bottom: 28px; }
 .scr-load-logo img { display: block; width: 100%; height: auto; image-rendering: auto; animation: scr-float 4s steps(8) infinite; }
 @keyframes scr-float { 50% { transform: translateY(-8px); } }
-.scr-load-credit { margin: -18px 0 24px; font: 400 18px / 1 var(--pix); letter-spacing: .1em; color: var(--dim); text-shadow: 2px 2px 0 #06041a; }
 .scr-load-bar { position: relative; width: min(400px, 86vw); padding-top: 50px; }
 .scr-load-walker { position: absolute; top: 2px; left: 0; transform: translateX(-50%); transition: left .25s steps(3); }
 .scr-load-walker .scr-bean { animation: scr-hop .5s steps(2) infinite; }
