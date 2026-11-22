@@ -1,6 +1,6 @@
 // Offline-first cache for the app shell: every file the game needs is on this site (no CDNs), so it is all
 // precached at install. Calls to the game server and to Cloudflare Turnstile are other origins and never cached.
-const CACHE = "puddleton-fable-v13";
+const CACHE = "puddleton-fable-v14";
 const SCREENS = ["agegate", "base", "boot", "confirm", "credits", "loading", "overlays", "phrasewheel", "prefs", "profile", "report", "roomlist", "sanction", "settings", "tips", "title"];
 const SHELL = [
   "./", "index.html", "play.html", "play.js", "start.mjs", "net.mjs", "config.mjs", "phrases.mjs", "style.css", "world.mjs", "stage.mjs",

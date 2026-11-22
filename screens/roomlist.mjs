@@ -120,7 +120,8 @@ export function passDialog(room, on, settings) {
   });
 }
 
-function createDialog(on, settings) {
+// Also used by the home screen's Create a room, after the narrator is picked.
+export function createDialog(on, settings) {
   return new Promise((resolve) => {
     const tid = nextId("rc"), hid = nextId("rc");
     const L = layer({ cls: "scr-roomcreate scr-veil", labelledby: tid, settings, escape: () => end(false) });

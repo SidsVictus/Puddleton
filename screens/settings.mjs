@@ -8,6 +8,8 @@ import { getBand } from "./agegate.mjs";
 export { DEFAULTS, SETTINGS_KEY, getSettings, setSetting, resetSettings, onChange, effectiveChat, applySettings } from "./prefs.mjs";
 export const GEAR_ICON = icon("gear");
 export const BUG_EMAIL = "sidsvictus@gmail.com";
+// The official community server. Discord itself is 13+, so it is never offered to the under 13 band.
+export const DISCORD_URL = "https://discord.gg/PunQKtq9XN";
 export const LINKS = {
   privacy: asset("../legal/privacy.html"), terms: asset("../legal/terms.html"),
   safety: asset("../legal/safety.html"), credits: asset("../legal/credits.html"),
@@ -65,6 +67,7 @@ function sections(band, o) {
     { id: "help", name: "Help", blurb: "Stuck, or found a bug?", rows: [
       { type: "button", label: "How to play", run: o.onHowToPlay, art: uiIcon("help") },
       { type: "button", label: "Report a bug", href: `mailto:${BUG_EMAIL}?subject=${encodeURIComponent("Puddleton bug report")}&body=${encodeURIComponent(`What happened:\n\n\nWhat I expected:\n\n\nGame version: ${o.version}\n`)}`, art: icon("flag"), hint: `Opens an email to ${BUG_EMAIL}.` },
+      ...(band === "child" ? [] : [{ type: "button", label: "Join our Discord", href: DISCORD_URL, art: icon("people"), hint: "The Puddleton community server, for players 13 and older." }]),
       { type: "button", label: "Safety Center", href: o.links.safety, art: icon("people"), hint: "How we keep Puddleton friendly, and what to do if something feels wrong." },
     ] },
     { id: "about", name: "About", blurb: "", rows: [

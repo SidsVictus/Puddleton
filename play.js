@@ -254,6 +254,7 @@ function applyBandUI() {
   const child = app.band === "child";
   $("#nameInput").placeholder = child ? "A nickname" : "Biscuit";
   $("#nameHint").textContent = child ? "Use a nickname, not your real name. Letters and numbers only." : "Letters, numbers and _ only.";
+  $("#discordLink").hidden = child || !app.band;   // Discord is 13+: never shown to the under 13 band
 }
 async function needGuest() {
   if (app.banned) { showBan(app.banned); return false; }
@@ -1432,9 +1433,12 @@ document.addEventListener("click", async (e) => {
   if (t.id === "quickBtn") return openQuickPlay();
   if (t.id === "createBtn") { if (needName() && (await needGuest())) { $("#chooseMsg").textContent = "Pick a narrator to open your room."; show("choose"); } return; }
   if (t.dataset.narrator) {
-    $("#chooseMsg").textContent = "Opening your room...";
-    const r = await showLoading(createRoom(t.dataset.narrator), { label: "Opening your room", settings: getSettings() });
-    if (r !== true) { $("#chooseMsg").textContent = typeof r === "string" ? r : "Could not open a room right now."; }
+    // same Public or Private (with a room pass) choice as Quick Play's Create a room
+    const narrator = t.dataset.narrator;
+    await roomlist.createDialog({ create: async (o) => {
+      const r = await showLoading(createRoom(narrator, o), { label: "Opening your room", settings: getSettings() });
+      return r === true ? true : (typeof r === "string" ? r : "Could not open a room right now.");
+    } }, getSettings());
     return;
   }
   if (t.id === "joinBtn") {

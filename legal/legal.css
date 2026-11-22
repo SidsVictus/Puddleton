@@ -17,7 +17,7 @@ a:hover { color: var(--moon); }
 /* top bar */
 .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 28px; padding: 16px 5vw; border-bottom: 2px dotted var(--line); }
 .mark { font-family: var(--pix); font-size: 26px; line-height: 1; color: var(--moon); text-decoration: none; }
-.mark b { font-weight: 400; color: inherit; }
+.mark b { font-weight: 400; color: var(--amber); }
 .pages { display: flex; flex-wrap: wrap; gap: 4px 22px; font-family: var(--pix); font-size: 20px; }
 .pages a { color: var(--faint); text-decoration: none; padding: 2px 0; border-bottom: 2px solid transparent; }
 .pages a:hover { color: var(--moon); }

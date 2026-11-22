@@ -34,7 +34,7 @@ canvas, .bean { image-rendering: auto; }   /* the 3D renders are finer than a sc
 .blink { animation: blink 1.2s steps(2) infinite; } @keyframes blink { 50% { opacity: .55; } }
 @keyframes hop { 50% { transform: translateY(-6px); } }
 .hud { position: fixed; top: 0; left: 0; right: 0; z-index: 6; display: flex; justify-content: space-between; align-items: center; padding: 18px 5vw; }
-.mark { font-family: var(--pix); font-weight: 700; font-size: 20px; color: var(--moon); text-decoration: none; } .mark b { color: inherit; font-weight: inherit; }
+.mark { font-family: var(--pix); font-weight: 700; font-size: 20px; color: var(--moon); text-decoration: none; } .mark b { color: var(--amber); }
 .hud-right { display: flex; gap: 20px; align-items: center; }
 .timer { font-family: var(--pix); font-size: 18px; color: var(--moon); } .timer.urgent { color: var(--blood); animation: blink .5s steps(2) infinite; }
 
