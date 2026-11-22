@@ -3,110 +3,226 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+mly31C+QQSAeXrtrKLIXFjPzAin+3Nu2O5/lqJcZv8=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://puddleton-server.sidsvictus.workers.dev wss://puddleton-server.sidsvictus.workers.dev http://localhost:8787 ws://localhost:8787; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#0e0b24">
-<title>Puddleton</title>
+<title>Play Puddleton: Free Online Mafia Party Game</title>
+<meta name="description" content="Play Puddleton, a free online Mafia party game for 4 to 16 players. Jelly-bean folk, secret roles and spooky nights on a floating pixel island. Join a room with friends or hop into Quick Play on any phone or PC.">
+<link rel="canonical" href="https://puddleton.surge.sh/play.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Puddleton">
+<meta property="og:title" content="Play Puddleton: Free Online Mafia Party Game">
+<meta property="og:description" content="Secret roles, spooky nights and a cozy floating town. Free in the browser for 4 to 16 players.">
+<meta property="og:url" content="https://puddleton.surge.sh/play.html">
+<meta property="og:image" content="https://puddleton.surge.sh/og.png">
+<meta property="og:image:alt" content="Puddleton After Dark: pixel jelly-bean folk on a floating island at night">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Play Puddleton: Free Online Mafia Party Game">
+<meta name="twitter:description" content="Secret roles, spooky nights and a cozy floating town. Free in the browser for 4 to 16 players.">
+<meta name="twitter:image" content="https://puddleton.surge.sh/og.png">
+<meta name="twitter:image:alt" content="Puddleton After Dark: pixel jelly-bean folk on a floating island at night">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Jersey+20&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="icon" href="brand/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="brand/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="style.css">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
+<link rel="stylesheet" href="screens/screens.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<link rel="modulepreload" href="./start.mjs">
+<link rel="modulepreload" href="./screens/boot.mjs">
+<link rel="modulepreload" href="./vendor/three.module.js">
+<script type="module" src="./start.mjs"></script>
 </head>
-<body class="game">
-<!-- the living painting: a pixel diorama across the top; everything you read sits on solid ink below it -->
+<body class="game booting">
+<!-- the living painting: a pixel diorama across the top of the home screen -->
 <div class="diorama"><canvas id="world"></canvas></div>
+<!-- pixel scene backdrops (scenes/*.svg): a different place for every screen and phase -->
+<div class="scene" id="scene"></div>
 <header class="hud">
-  <a class="mark" href="index.html">Puddleton <b>After Dark</b></a>
-  <div class="hud-right"><span class="timer" id="timer"></span><button class="iconbtn" id="soundBtn" aria-label="Mute sound"></button><button class="link" data-open-help>Help</button></div>
+  <div class="hud-left">
+    <button class="tile" id="backBtn" aria-label="Back" hidden><img src="ui/back.svg" alt=""></button>
+    <a class="mark" id="hudMark" href="index.html" style="visibility: hidden">Puddleton <b>After Dark</b></a>
+  </div>
+  <div class="hud-right">
+    <button class="tile danger" id="endRoomBtn" aria-label="End room" hidden><img src="ui/door.svg" alt=""><span>End room</span></button>
+    <button class="tile" id="profileBtn" aria-label="Your profile" hidden><img src="screens/icons/person.svg" alt=""><span>Profile</span></button>
+    <button class="iconbtn tile" id="soundBtn" aria-label="Mute sound"></button>
+    <button class="tile" id="hudHelp" data-open-help aria-label="Help" hidden><img src="ui/help.svg" alt=""></button>
+    <button class="tile" id="gearBtn" aria-label="Settings"><img src="screens/icons/gear.svg" alt=""></button>
+  </div>
 </header>
-<div class="phase" id="phaseWrap" hidden><span class="phase-title" id="phaseLabel"></span><span class="eyebrow" id="modeBadge"></span></div>
 
 <main id="home" class="screen active">
   <div class="cast" id="heroBeans"></div>
   <h1 class="wordmark">Puddleton<em>after dark</em></h1>
-  <p class="lede">A cute town in the clouds. A dark secret. Someone here wears a tiny fedora.</p>
+  <div class="home-row">
+  <button class="tile" id="wardrobeBtn"><img src="ui/hanger.svg" alt=""><span>Wardrobe</span></button>
   <div class="form">
-    <label class="field"><span class="eyebrow">Your name</span><input id="nameInput" maxlength="16" placeholder="Biscuit" autocomplete="nickname"></label>
-    <button class="btn big" id="createBtn">Create a room</button>
-    <div class="dither"></div>
-    <div class="join"><label class="field"><span class="eyebrow">Or join with a code</span><input id="codeInput" maxlength="6" placeholder="ABC123" autocapitalize="characters"></label><button class="btn alt" id="joinBtn">Join</button></div>
-    <p class="note" id="homeMsg"></p>
+    <label class="field"><span class="eyebrow">Your name</span><input id="nameInput" maxlength="16" placeholder="Biscuit" autocomplete="nickname" spellcheck="false" aria-describedby="nameHint"></label>
+    <p class="note name-hint" id="nameHint">Letters, numbers and _ only.</p>
+    <div class="play-row"><button class="btn big" id="quickBtn">Quick Play</button><button class="btn big alt" id="createBtn">Create a room</button></div>
+    <div class="or"><span>or join a friend</span></div>
+    <div class="join"><label class="field"><span class="eyebrow">Room code</span><input id="codeInput" maxlength="6" placeholder="ABC123" autocapitalize="characters" spellcheck="false"></label><button class="btn alt big" id="joinBtn">Join</button></div>
+    <p class="note" id="homeMsg" role="status"></p>
+  </div>
+  <button class="tile" data-open-help><img src="ui/help.svg" alt=""><span>How to play</span></button>
+  </div>
+  <footer class="legal-foot"><a href="legal/privacy.html" target="_blank" rel="noopener">Privacy</a><a href="legal/terms.html" target="_blank" rel="noopener">Terms</a><a href="legal/safety.html" target="_blank" rel="noopener">Safety Center</a><a href="legal/credits.html" target="_blank" rel="noopener">Credits</a></footer>
+</main>
+
+<main id="wardrobe" class="screen">
+  <div class="wardrobe">
+    <div class="mirror plate">
+      <span class="eyebrow">Your bean</span>
+      <canvas id="mirror" width="150" height="150"></canvas>
+      <div class="wstage" id="wstageBox" hidden><canvas id="wstage"></canvas></div>
+      <p class="display" id="lookName"></p>
+      <p class="note" id="lockNote"></p>
+      <button class="btn big" id="wardrobeDone">Done</button>
+    </div>
+    <div class="rack plate">
+      <nav class="tabs racks"><button class="tab active" data-rack="body">Bean colors</button><button class="tab" data-rack="head">Head</button><button class="tab" data-rack="pack">Backpacks</button><button class="tab" data-rack="house">Houses</button><button class="tab" data-rack="killfx">Kill effects</button><button class="tab" data-rack="tomb">Tombstones</button><button class="tab" data-rack="emote">Emotes</button><button class="tab" data-rack="dance">Dances</button></nav>
+      <ul class="swatches" id="rackList"></ul>
+    </div>
   </div>
 </main>
 
 <main id="choose" class="screen">
-  <h2 class="display">Who tells the story?</h2>
+  <div class="plate title-plate">
+    <span class="eyebrow">New room</span>
+    <h2 class="display">Who tells the story?</h2>
+    <p class="note" id="chooseMsg" role="status">Pick a narrator to open your room.</p>
+  </div>
   <div class="options">
-    <button class="option" data-narrator="bot"><b>The town clock</b><span>The game narrates itself and keeps time. You play too.</span></button>
-    <button class="option" data-narrator="human"><b>Me, the Grandmaster</b><span>You run the night from the narrator's chair. You don't play.</span></button>
+    <button class="option plate" data-narrator="bot"><img src="ui/clock.svg" alt=""><b>The town clock</b><span>The game narrates itself and keeps time.</span><em>You play too</em></button>
+    <button class="option plate" data-narrator="human"><img src="ui/book.svg" alt=""><b>Me, the Grandmaster</b><span>You run the night from the narrator's chair.</span><em>You do not play</em></button>
   </div>
 </main>
 
 <main id="lobby" class="screen">
-  <ul class="street" id="roster"></ul>
   <div class="lobby">
-    <div>
+    <section class="plate code-plate">
       <span class="eyebrow">Room code</span>
       <div class="code" id="roomCode"></div>
-      <button class="link" id="copyBtn">Copy invite link</button>
-      <p class="note">On the island: <span id="countLabel"></span></p>
-    </div>
-    <div id="hostSettings" hidden>
-      <span class="eyebrow">Game mode</span>
+      <p class="note room-kind" id="roomKind"></p>
+      <div class="row-btns">
+        <button class="tile" id="copyBtn"><img src="ui/share.svg" alt=""><span>Share invite</span></button>
+        <button class="tile" id="replayBtn" hidden><img src="ui/book.svg" alt=""><span>Watch the replay</span></button>
+      </div>
+    </section>
+    <section class="plate roster-plate">
+      <header class="plate-head">
+        <div><span class="eyebrow">On the dock</span><p class="count"><span id="countLabel"></span> players</p></div>
+        <button class="tile" id="lobbyWardrobeBtn"><img src="ui/hanger.svg" alt=""><span>Wardrobe</span></button>
+      </header>
+      <ul class="street" id="roster"></ul>
+      <p class="note" id="rosterNote">Tap a player to report, mute or block them.</p>
+    </section>
+    <section class="plate settings" id="hostSettings" hidden>
+      <span class="eyebrow host"><img src="ui/crown.svg" alt="">Host settings</span>
+      <h3 class="label">Game mode</h3>
       <div class="modes" id="modePicker"></div>
       <label class="switch"><input type="checkbox" id="chatToggle" checked><i></i>Town Square group chat</label>
-      <p class="note">Private whispers are always on.</p>
+      <label class="switch"><input type="checkbox" id="killerToggle" checked><i></i>Victims see their killer</label>
+      <h3 class="label">Who can join</h3>
+      <div class="vis" role="group" aria-label="Who can join" id="visPicker">
+        <button data-vis="public" aria-pressed="true">Public</button><button data-vis="private" aria-pressed="false">Private</button>
+      </div>
+      <form class="pass-row" id="passForm" hidden>
+        <label class="field"><span class="eyebrow">Room pass</span><input id="passInput" maxlength="32" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="3 to 32 characters"></label>
+        <button class="btn small alt" id="passSave">Set pass</button>
+      </form>
+      <p class="note" id="visNote"></p>
+      <label class="switch" id="secretRow"><input type="checkbox" id="secretToggle"><i></i>Secret whispers<em>private 13+ rooms only</em></label>
       <label class="switch secret" id="rigRow" hidden><input type="checkbox" id="rigToggle"><i></i>Director's cut<em>only you can see this</em></label>
+      <p class="note" id="hostNote">The island runs the game, so you can close this page and come back.</p>
       <button class="btn big" id="startBtn" disabled>Start the night</button>
-      <p class="note" id="startHint"></p>
-    </div>
-    <div id="guestWait" hidden><span class="eyebrow">Game mode</span><p class="display" id="guestMode"></p><p class="note">Waiting for the host to start.</p></div>
+      <p class="note center" id="startHint" role="status"></p>
+    </section>
+    <section class="plate settings" id="guestWait" hidden>
+      <span class="eyebrow">Game mode</span>
+      <p class="display" id="guestMode"></p>
+      <p class="note" id="guestModeDesc"></p>
+      <p class="note" id="guestRules"></p>
+      <div class="waiting"><img class="blink" src="ui/hourglass.svg" alt=""><p id="waitText">Waiting for the host to start</p></div>
+      <p class="note center" id="guestHint" role="status"></p>
+    </section>
   </div>
 </main>
 
 <main id="shuffle" class="screen">
-  <h2 class="display blink">The Grandmaster is shuffling the cards</h2>
-  <p class="lede">Your secret role arrives in a moment.</p>
+  <div class="plate title-plate">
+    <img class="big-ic blink" src="ui/hourglass.svg" alt="">
+    <h2 class="display">The Grandmaster is shuffling the cards</h2>
+    <p class="lede">Your secret role arrives in a moment.</p>
+  </div>
 </main>
 
 <main id="game" class="screen">
-  <ul class="street" id="players"></ul>
-  <p class="prompt" id="actionPrompt"></p>
-  <div class="stage">
-    <aside class="identity" id="roleCard"></aside>
-    <section class="story"><p class="story-now" id="storyNow"></p><ol class="story-past" id="feed"></ol></section>
-    <aside class="talk">
+  <div class="board">
+    <section class="you">
+      <div class="clock plate">
+        <span class="eyebrow" id="modeBadge"></span>
+        <span class="phase-title"><img id="phaseIcon" src="ui/moon.svg" alt=""><span id="phaseLabel"></span></span>
+        <div class="timer" id="timer"></div>
+        <div class="meter" id="meter"><i id="meterFill"></i></div>
+        <p class="note" id="voteCount"></p>
+      </div>
+      <div class="identity plate gold" id="roleCard"></div>
+      <div class="prompt plate" id="actionPrompt" role="status"></div>
+      <div class="host-tools plate" id="hostTools" hidden>
+        <span class="eyebrow host"><img src="ui/crown.svg" alt="">Host controls</span>
+        <button class="btn big" id="dealBtn" hidden>Deal the cards</button>
+        <button class="btn big" id="advanceBtn" hidden></button>
+        <button class="btn alt" id="endVoteBtn" hidden>End voting</button>
+        <p class="note host-why" id="hostWhy"></p>
+      </div>
+    </section>
+    <section class="table">
+      <div class="stage-wrap plate"><canvas id="stage"></canvas><button class="btn small alt stage-stop" id="replayStop" hidden>Stop replay</button></div>
+      <div class="emotes" id="emoteBar"></div>
+      <ul class="roster" id="players"></ul>
+      <div class="hearth"><p class="story-now plate" id="storyNow"></p></div>
+    </section>
+    <aside class="talk plate">
       <nav class="tabs">
         <button class="tab active" data-tab="square" id="squareTab">Square</button>
         <button class="tab" data-tab="dms">Whispers<b id="dmBadge"></b></button>
+        <button class="tab" data-tab="story">Story</button>
+        <button class="tab" data-tab="ghosts" id="ghostTab" hidden>Ghosts</button>
         <button class="tab" data-tab="director" id="directorTab" hidden>Director</button>
       </nav>
       <div class="pane active" id="pane-square">
         <ul class="msgs" id="chatList"></ul>
-        <form class="composer" id="chatForm"><input id="chatInput" maxlength="500" placeholder="Say something to the town"><button class="link">Send</button></form>
-        <p class="note" id="chatNote"></p>
+        <form class="composer" id="chatForm"><button type="button" class="tile phrase-btn" data-phrase="chat" aria-label="Quick chat phrases"><img src="screens/icons/bubble.svg" alt=""><span>Phrases</span></button><input id="chatInput" maxlength="200" placeholder="Say something to the town" aria-label="Message to the town"><button class="btn small" id="chatSend">Send</button></form>
+        <p class="note chat-note" id="chatNote" role="status"></p>
       </div>
       <div class="pane" id="pane-dms">
         <select id="dmTo" aria-label="Whisper to"></select>
         <ul class="msgs" id="dmList"></ul>
-        <form class="composer" id="dmForm"><input id="dmInput" maxlength="500" placeholder="Whisper privately"><button class="link">Send</button></form>
+        <form class="composer" id="dmForm"><button type="button" class="tile phrase-btn" data-phrase="dm" aria-label="Whisper a phrase"><img src="screens/icons/bubble.svg" alt=""><span>Phrases</span></button><input id="dmInput" maxlength="200" placeholder="Whisper privately" aria-label="Private whisper"><button class="btn small" id="dmSend">Send</button></form>
+        <p class="note chat-note" id="dmNote" role="status"></p>
+      </div>
+      <div class="pane" id="pane-story"><ol class="story-past msgs" id="feed"></ol></div>
+      <div class="pane" id="pane-ghosts">
+        <ul class="msgs" id="ghostList"></ul>
+        <form class="composer" id="ghostForm"><button type="button" class="tile phrase-btn" data-phrase="ghost" aria-label="Ghost chat phrases"><img src="screens/icons/bubble.svg" alt=""><span>Phrases</span></button><input id="ghostInput" maxlength="200" placeholder="Only the dead can hear you" aria-label="Message to the ghosts"><button class="btn small" id="ghostSend">Send</button></form>
+        <p class="note chat-note" id="ghostNote" role="status"></p>
       </div>
       <div class="pane" id="pane-director"></div>
     </aside>
   </div>
-  <button class="btn big float" id="dealBtn" hidden>Deal the cards</button>
-  <button class="btn big float" id="advanceBtn" hidden></button>
 </main>
 
+<!-- a short banner when night falls or day dawns; it never takes input away from the game -->
+<div class="phasecard" id="phaseCard" hidden aria-live="polite"><div class="band"><img id="phaseCardIcon" src="ui/moon.svg" alt=""><h2 id="phaseCardTitle"></h2><div id="phaseCardText"></div></div></div>
 <div class="curtain" id="reveal" hidden><div class="reveal" id="revealCard"></div></div>
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
 
 <!-- HELP: the full story manual (also played as a walkthrough on first launch) -->
 <section id="help" class="curtain book" hidden>
   <div class="book-inner">
-    <button class="link close" data-close-help>Close</button>
+    <button class="tile close" data-close-help aria-label="Close help"><img src="ui/close.svg" alt=""></button>
     <span class="eyebrow">Help</span>
     <h2 class="display">The Puddleton Fable</h2>
     <div id="manualPages">
@@ -114,7 +230,7 @@
         <p>Puddleton floats above a sea of clouds: jelly-bean folk, drifting lanterns, the smell of fresh muffins. But when the moon comes up, someone puts on a tiny fedora, and the <b>Mafia</b> goes to work.</p>
         <p>Every game is a fable with two halves that repeat until one side wins: <b>Night</b>, for secret moves, and <b>Day</b>, for talking and voting.</p></article>
       <article class="page"><h3><span>Chapter 2</span>Opening the door</h3>
-        <p>One friend taps <b>Create a room</b> and gets a six-letter code. Everyone else types it into <b>Join</b>. The creator picks who tells the story: the <b>town clock</b>, which runs everything while the creator plays, or a human <b>Grandmaster</b>, who narrates and does not play.</p>
+        <p>Tap <b>Quick Play</b> to hop into an open room, or have one friend tap <b>Create a room</b> to get a six-letter code that everyone else types into <b>Join</b>. The creator picks who tells the story: the <b>town clock</b>, which runs everything while the creator plays, or a human <b>Grandmaster</b>, who narrates and does not play.</p>
         <p>The Grandmaster sees everything, every role and every whisper, just like a narrator should.</p></article>
       <article class="page"><h3><span>Chapter 3</span>When night falls</h3>
         <p>At night, players with powers tap a face to use them. Everyone else sleeps. When the sun rises, the story reveals who did not wake up, and what role they had.</p>
@@ -147,14 +263,14 @@
           <dt>Speed</dt><dd>Classic roles with lightning-fast timers. Whole games in minutes.</dd>
         </dl></article>
       <article class="page"><h3><span>Chapter 8</span>Talking</h3>
-        <p><b>Whispers</b>, the private messages, are always open: pick a player and write to them. Only the two of you, and the Grandmaster, can read it. The <b>Town Square</b> group chat opens during the day when the host switches it on. The dead tell no tales: once you are out, you can only watch.</p>
+        <p><b>Whispers</b> are private messages: pick a player and write to them. The whole table sees that you whispered, never what you said; only the two of you, and the Grandmaster, can read it. The <b>Town Square</b> group chat opens during the day when the host switches it on. Once you are out, you chat only with the other ghosts.</p>
+        <p>Players under 13 chat with ready-made phrases and have no whispers. Tap any player to report, mute or block them.</p>
         <p>Find the Mafia, trust no muffin, and have fun. This manual is always available in the Help section.</p></article>
     </div>
   </div>
 </section>
 <dialog id="manual"></dialog>
 
-<link rel="modulepreload" href="./engine/engine.mjs">
 <script type="module" src="./play.js"></script>
 </body>
 </html>

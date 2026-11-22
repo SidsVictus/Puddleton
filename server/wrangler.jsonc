@@ -1,0 +1,51 @@
+{
+  // Puddleton game server: one front Worker, one Durable Object per room, one Lobby Durable Object, one D1 database.
+  // Local: `npx wrangler dev` (no login needed). Deploy steps: README.md.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "puddleton-server",
+  // The owner's Cloudflare account (not a secret), so deploys never ask which account to use.
+  "account_id": "c150b67269aaac2edc5abf438f09c28c",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-11-01",
+
+  // cosmetics.mjs (shared with the browser) imports three.js for drawing; the server only needs its catalog,
+  // so "three" resolves to a tiny stub here.
+  "alias": { "three": "./src/three-stub.mjs" },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOM", "class_name": "Room" },
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
+  },
+  // Free plan: Durable Objects must use the SQLite storage backend.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "puddleton",
+      // Replace with the id printed by `npx wrangler d1 create puddleton` before deploying (README step 3).
+      "database_id": "9176e03f-dda9-40b6-bab1-7fa7b15e97ec",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Plain settings. Secrets (TURNSTILE_SECRET, ADMIN_TOKEN, HASH_SALT) are set with `wrangler secret put`
+  // for production and passed with --var or .dev.vars locally. Never put real secrets here.
+  "vars": {
+    // Extra allowed browser origins, comma separated (for example the future .online domain once it is live).
+    "EXTRA_ORIGINS": "",
+    // Incoming WebSocket messages per billed Durable Object request in the capacity estimate. 1 is the worst case;
+    // Cloudflare documents 20 (20 messages = 1 request). Raise to 20 once the dashboard confirms it.
+    "WS_RATIO": "1",
+    // Test knobs, leave at 1 in production: TIME_SCALE shortens every game timer, CAP_SCALE shrinks the daily limits.
+    // (REQUEST_TTL_MS, unset here, can shorten the 7 day friend request expiry in tests.)
+    "TIME_SCALE": "1",
+    "CAP_SCALE": "1"
+  },
+
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }   // request logs off: they can carry visitor IPs; our own console.log lines stay
+}

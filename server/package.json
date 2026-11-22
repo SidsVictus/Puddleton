@@ -1,0 +1,21 @@
+{
+  "name": "puddleton-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Authoritative game server for Puddleton on Cloudflare Workers and Durable Objects",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 migrations apply puddleton --local",
+    "db:remote": "wrangler d1 migrations apply puddleton --remote",
+    "test:engine": "node ../engine/test.mjs",
+    "test:unit": "node test/unit.mjs",
+    "test:int": "node test/integration.mjs",
+    "test": "node ../engine/test.mjs && node test/unit.mjs && node test/integration.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.166.0",
+    "ws": "^8.23.0"
+  }
+}

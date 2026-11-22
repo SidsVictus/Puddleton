@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0b24">
+<title>Puddleton screens</title>
+<link rel="icon" href="../brand/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="../brand/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="../brand/apple-touch-icon.png">
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="screens.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.js" } }</script>
+<style>
+  /* the demo page itself: a stand in for the game behind the screens */
+  .demo { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+  .demo h1 { font-size: 44px; margin: 8px 0 4px; }
+  .demo > p { color: var(--dim); margin: 0 0 16px; }
+  .demo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .demo-grid section { display: grid; align-content: start; gap: 6px; }
+  .demo-grid h2 { font-size: 26px; margin: 0 0 4px; }
+  .demo-grid button { text-align: left; font: 700 14px/1.2 var(--body); color: var(--amber); padding: 8px 10px; background: #1c1644; box-shadow: inset 0 0 0 2px #3a3360; }
+  .demo-grid button:hover { color: var(--moon); box-shadow: inset 0 0 0 2px var(--amber); }
+  .demo-log { font: 13px/1.4 ui-monospace, monospace; color: var(--teal); white-space: pre-wrap; max-height: 160px; overflow: auto; margin-top: 16px; }
+  .demo-brand { margin-top: 24px; } .demo-brand h2 { font-size: 26px; margin: 0 0 8px; } .demo-brand > picture img { width: 359px; max-width: 100%; height: auto; }
+  .demo-icons { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-top: 12px; }
+  .demo-icons figure { margin: 0; display: grid; justify-items: center; gap: 6px; } .demo-icons figcaption { font: 12px var(--body); color: var(--dim); }
+  .demo-icons img { image-rendering: auto; } .demo-icons .mask { border-radius: 50%; }
+  .demo-hud { position: fixed; top: 12px; right: 12px; z-index: 5; display: flex; gap: 8px; }
+</style>
+</head>
+<body class="game scened">
+<div class="scene" id="scene" data-name="square"><i style="background-image:url(../scenes/square.svg)"></i></div>
+<div class="demo-hud" id="hud"></div>
+<main class="demo">
+  <h1 class="display">Puddleton screens</h1>
+  <p>Every screen in every state. Each button opens one; results print below.</p>
+  <div class="demo-grid" id="grid"></div>
+  <pre class="demo-log" id="log" aria-live="polite"></pre>
+  <section class="demo-brand" aria-label="Brand files">
+    <h2>Brand files</h2>
+    <picture><source type="image/webp" srcset="../brand/logo-718.webp"><img src="../brand/logo-718.png" width="359" height="175" alt="Puddleton After Dark wordmark"></picture>
+    <div class="demo-icons">
+      <figure><img src="../brand/favicon-32.png" width="32" height="32" alt=""><figcaption>favicon 32</figcaption></figure>
+      <figure><img src="../brand/favicon-48.png" width="48" height="48" alt=""><figcaption>favicon 48</figcaption></figure>
+      <figure><img src="../brand/apple-touch-icon.png" width="90" height="90" alt=""><figcaption>apple 180</figcaption></figure>
+      <figure><img src="../brand/icon-192.png" width="96" height="96" alt=""><figcaption>192</figcaption></figure>
+      <figure><picture><source type="image/webp" srcset="../brand/icon-512.webp"><img src="../brand/icon-512.png" width="128" height="128" alt=""></picture><figcaption>512</figcaption></figure>
+      <figure><img class="mask" src="../brand/icon-maskable-512.png" width="128" height="128" alt=""><figcaption>maskable 512 (safe circle)</figcaption></figure>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import * as boot from "./boot.mjs";
+import * as title from "./title.mjs";
+import { confirm } from "./confirm.mjs";
+import * as agegate from "./agegate.mjs";
+import { showLoading } from "./loading.mjs";
+import * as settings from "./settings.mjs";
+import * as overlays from "./overlays.mjs";
+import * as credits from "./credits.mjs";
+import * as profile from "./profile.mjs";
+import * as phrases from "./phrasewheel.mjs";
+import * as reports from "./report.mjs";
+import * as sanction from "./sanction.mjs";
+import * as roomlist from "./roomlist.mjs";
+
+const $ = (s) => document.querySelector(s);
+const log = (name, v) => { $("#log").textContent = `${name}: ${JSON.stringify(v)}\n` + $("#log").textContent; window.demoLast = v; };
+const params = new URLSearchParams(location.search);
+const wait = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+const seedLists = () => { settings.setSetting("chat.muted", [{ id: "p7", name: "Noodle" }, { id: "p9", name: "Captain Waffles" }]); settings.setSetting("chat.blocked", []); };
+const openSettings = (o = {}) => { seedLists(); return settings.open({ version: "v0.9.2", onHowToPlay: () => log("help", "open the manual"), onReplayTutorial: () => log("tutorial", "replay"), ...o }); };
+
+const BODIES = ["bubblegum", "sky", "butter", "mint", "lilac", "peach", "seafoam", "orchid", "snowdrop", "cocoa", "cherry", "limefizz", "cobalt", "charcoal", "frostbite", "glowstick"];
+const HEADS = ["none", "cap", "beanie", "bandana", "chef", "cowboy", "crown", "pirate", "wizard", "party", "propeller", "bunny", "cat", "witch", "bucket", "flowers"];
+const NAMES = ["Biscuit", "Noodle", "Captain Waffles", "Pip", "Marmalade", "Toffee", "Juniper", "Bramble", "Sprout", "Pickle", "Dumpling", "Clementine", "Mochi", "Pudding", "Sorbet", "Truffle"];
+const CAST = ["godfather", "mafia", "framer", "angel", "detective", "vigilante", "mayor", "jester", "serialkiller", "villager", "villager", "villager", "mafia", "villager", "villager", "villager"];
+const look = (i) => ({ body: BODIES[i % 16], head: HEADS[i % 16], pack: i % 5 === 0 ? "daypack" : "none" });
+const cast = (n) => Array.from({ length: n }, (_, i) => ({ id: "p" + i, name: NAMES[i], role: CAST[i], look: look(i), alive: i % 3 !== 1 }));
+const FRIENDS = [
+  { id: "f1", name: "Noodle", look: look(1), online: true, room: { code: "QX7P2K", mode: "crazy", players: 9, max: 16 } },
+  { id: "f2", name: "Captain Waffles", look: look(2), online: true, room: null },
+  { id: "f3", name: "Marmalade", look: look(4), online: false, room: null },
+  { id: "f4", name: "Juniper", look: look(6), online: true, room: { code: "MM4RT2", mode: "classic", players: 5, max: 16 } },
+  { id: "f5", name: "Sprout", look: look(8), online: false, room: null },
+];
+const REQUESTS = [
+  { id: "q1", name: "Pudding", look: look(13) },
+  { id: "q2", name: "Clementine", look: look(11) },
+];
+const openProfile = (o = {}) => profile.open({
+  player: { id: "me", name: "Biscuit", look: { body: "bubblegum", head: "cap", pack: "daypack", house: "match", killfx: "usual", tomb: "stone", dance: "hop" } },
+  owned: { body: ["bubblegum", "sky", "butter", "mint", "lilac", "cherry"], head: ["none", "cap", "beanie", "bandana"], pack: ["none", "daypack"], emote: ["wave", "shrug", "laugh", "point", "sweat"], dance: ["hop"] },
+  stats: { played: 42, wins: 19, roles: { villager: { played: 18, wins: 9 }, angel: { played: 5, wins: 3 }, detective: { played: 6, wins: 2 }, mafia: { played: 7, wins: 3 }, godfather: { played: 3, wins: 2 }, jester: { played: 2, wins: 0 }, mayor: { played: 1, wins: 0 } } },
+  friendLink: "https://puddleton.example/f/8KQ2-PEAR",
+  friends: FRIENDS,
+  requests: REQUESTS,
+  on: { copy: (u) => log("copy", u), resetLink: () => wait(300, "https://puddleton.example/f/3MZ9-FIG" ), join: (f) => log("join", f.name), remove: (f) => log("remove", f.name), wardrobe: () => log("wardrobe", "open"),
+    accept: (r) => { log("accept", r.name); return wait(300, { id: "f-" + r.id, name: r.name, look: r.look, online: true, room: null }); },
+    decline: (r) => { log("decline", r.name); return wait(200); } },
+  ...o,
+});
+
+// a small demo phrase catalog (the real one lives in fable/phrases.mjs)
+const CATALOG = [
+  { id: "hello.1", cat: "Hello", text: "Hi everyone!" }, { id: "hello.2", cat: "Hello", text: "Good luck, have fun!" }, { id: "hello.3", cat: "Hello", text: "Nice to meet you, {player}!", args: ["player"] },
+  { id: "accuse.1", cat: "Accuse", text: "I think {player} is Mafia", args: ["player"] }, { id: "accuse.2", cat: "Accuse", text: "{player} is acting suspicious", args: ["player"] },
+  { id: "accuse.3", cat: "Accuse", text: "{player} is lying about being the {role}", args: ["player", "role"] },
+  { id: "defend.1", cat: "Defend", text: "I am not the Mafia, promise!" }, { id: "defend.2", cat: "Defend", text: "I trust {player}", args: ["player"] }, { id: "defend.3", cat: "Defend", text: "I am the {role}", args: ["role"] },
+  { id: "vote.1", cat: "Vote", text: "Let's vote for {player}", args: ["player"] }, { id: "vote.2", cat: "Vote", text: "Wait, let's talk first" }, { id: "vote.3", cat: "Vote", text: "I will abstain this time" },
+  { id: "fun.1", cat: "Fun", text: "Trust no muffin." }, { id: "fun.2", cat: "Fun", text: "Good game, everyone!" }, { id: "fun.3", cat: "Fun", text: "That was close!" },
+];
+const PLAYERS = NAMES.slice(0, 9).map((n, i) => ({ id: "p" + i, name: n }));
+const ROOMS = [
+  { id: "r1", name: "Biscuit's room", mode: "classic", players: 7, max: 16, narrator: "bot" },
+  { id: "r2", name: "Night owls", mode: "crazy", players: 12, max: 16, narrator: "human" },
+  { id: "r3", name: "Speedy beans", mode: "speed", players: 4, max: 16, narrator: "bot" },
+  { id: "r4", name: "Friends only", mode: "classic", players: 5, max: 16, narrator: "bot", private: true },
+  { id: "r5", name: "Spooky stories", mode: "gore", players: 16, max: 16, narrator: "human" },
+  { id: "r6", name: "Pudding's place", mode: "crazy", players: 9, max: 16, narrator: "bot" },
+];
+const roomOn = { refresh: () => wait(800, [...ROOMS].reverse()), join: (r, pass) => wait(600, r.private && pass !== "MUFFIN" ? "That pass did not work." : true), quickJoin: () => wait(700, true), create: (o) => wait(500, (log("create", o), true)) };
+
+// name -> [group, label, run]
+const S = {
+  "boot": ["Boot sting", "Play the sting", () => boot.play()],
+  "title": ["Title", "Title screen", () => title.show({ version: "v0.9.2" })],
+  "agegate": ["Age gate", "First visit (reset first)", () => { agegate.resetForTesting(); return agegate.show(); }],
+  "agegate-stored": ["Age gate", "Already answered (resolves at once)", () => agegate.show()],
+  "loading-tasks": ["Loading", "Five tasks, real progress", () => showLoading([
+    { label: "Rowing to the island", run: () => wait(700, "boat") }, { label: "Lighting the lanterns", run: () => wait(1500, "lamps") },
+    { label: "Baking muffins", run: () => wait(2300, "muffins") }, { label: "Waking the beans", run: () => wait(3100, "beans") }, { label: "Dusting off fedoras", run: () => wait(3600, "hats") }], { label: "Loading" })],
+  "loading-fast": ["Loading", "Fast promise (still 2 seconds)", () => showLoading(wait(200, "fast"), { label: "Joining the room" })],
+  "loading-report": ["Loading", "Function with report()", () => showLoading(async (report) => { for (let i = 1; i <= 10; i++) { await wait(350); report(i / 10, i < 5 ? "Packing suitcases" : "Boarding the ferry"); } return "ok"; })],
+  "settings": ["Settings", "Open (adult band)", () => openSettings({ band: "adult" })],
+  "settings-chat-adult": ["Settings", "Chat and safety, adult", () => openSettings({ band: "adult", section: "chat" })],
+  "settings-chat-child": ["Settings", "Chat and safety, child", () => openSettings({ band: "child", section: "chat" })],
+  "settings-display": ["Settings", "Display", () => openSettings({ band: "teen", section: "display" })],
+  "settings-access": ["Settings", "Accessibility", () => openSettings({ band: "teen", section: "access" })],
+  "settings-account": ["Settings", "Account and privacy", () => openSettings({ band: "teen", section: "account" })],
+  "settings-help": ["Settings", "Help", () => openSettings({ band: "teen", section: "help" })],
+  "settings-about": ["Settings", "About", () => openSettings({ band: "teen", section: "about" })],
+  "settings-gameplay": ["Settings", "Gameplay", () => openSettings({ band: "teen", section: "gameplay" })],
+  "ov-connecting": ["Overlays", "Connecting", () => { const h = overlays.connecting({ onCancel: () => log("connecting", "cancelled") }); return wait(6000).then(() => h.close()); }],
+  "ov-reconnecting": ["Overlays", "Connection interrupted", () => overlays.reconnecting({ seconds: 5, onRetry: (n) => wait(1200, n >= 3), onLeave: () => log("reconnecting", "left") }).done],
+  "ov-notfound": ["Overlays", "Room not found", () => overlays.roomNotFound({ code: "BXK42Q" })],
+  "ov-update": ["Overlays", "New version available", () => overlays.updateAvailable({ onRefresh: () => log("update", "would reload") })],
+  "ov-maintenance": ["Overlays", "Under maintenance", () => overlays.maintenance({ until: new Date(Date.now() + 47 * 60000) })],
+  "ov-offline": ["Overlays", "You are offline", () => overlays.offline().done],
+  "ov-full": ["Overlays", "The island is full", () => overlays.islandFull()],
+  "ov-full-open": ["Overlays", "Island full, ferry about to leave", () => overlays.islandFull({ resetAt: new Date(Date.now() + 4000) })],
+  "credits": ["Credits", "Crazy game, 12 players", () => credits.play({ players: cast(12), winner: "town", mode: "crazy", localId: "p3" })],
+  "credits-16": ["Credits", "Classic game, 16 players, Mafia wins", () => credits.play({ players: cast(16).map((p) => ({ ...p, role: ["framer", "angel", "vigilante", "jester", "serialkiller"].includes(p.role) ? "villager" : p.role })), winner: "mafia", mode: "classic", localId: "p0" })],
+  "credits-calm": ["Credits", "Reduced motion (pages)", () => credits.play({ players: cast(10), winner: "jester", mode: "crazy", localId: "p7", settings: { display: { reduceMotion: true } } })],
+  "profile": ["Profile", "Profile with friends", () => openProfile()],
+  "profile-items": ["Profile", "Items tab", () => openProfile({ tab: "items" })],
+  "profile-friends": ["Profile", "Friends tab (phone)", () => openProfile({ tab: "friends" })],
+  "profile-new": ["Profile", "Brand new player", () => openProfile({ stats: { played: 0, wins: 0 }, friends: [], requests: [], owned: { body: ["bubblegum"] } })],
+  "profile-requests": ["Profile", "Friend requests (phone)", () => openProfile({ tab: "friends", friends: FRIENDS.slice(0, 2) })],
+  "phrases": ["Phrase wheel", "Open the phrase menu", () => phrases.open({ catalog: CATALOG, players: PLAYERS })],
+  "phrases-accuse": ["Phrase wheel", "Accuse, then pick a player", async () => { const p = phrases.open({ catalog: CATALOG, players: PLAYERS }); await wait(400); document.querySelector('.scr-pw-list [data-i="1"]').click(); await wait(200); document.querySelector('.scr-pw-list [data-i="0"]').click(); return p; }],
+  "phrases-role": ["Phrase wheel", "Defend with a role", async () => { const p = phrases.open({ catalog: CATALOG, players: PLAYERS }); await wait(400); document.querySelector('.scr-pw-list [data-i="2"]').click(); await wait(200); document.querySelector('.scr-pw-list [data-i="2"]').click(); return p; }],
+  "report": ["Report", "Report a player", () => reports.report({ target: { id: "p1", name: "Noodle" } })],
+  "report-chosen": ["Report", "Report, reason picked", async () => { const p = reports.report({ target: { id: "p1", name: "Noodle" } }); await wait(400); document.querySelector('.scr-rp-reasons [data-value="bullying"]').click(); return p; }],
+  "report-thanks": ["Report", "Report sent (thanks)", async () => { const p = reports.report({ target: { id: "p1", name: "Noodle" } }); await wait(300); document.querySelector('.scr-rp-reasons [data-value="asking"]').click(); document.querySelector(".scr-rp-form [type=submit]").click(); return p; }],
+  "mute": ["Report", "Mute confirmation", () => reports.confirmMute({ target: { name: "Noodle" } })],
+  "block": ["Report", "Block confirmation", () => reports.confirmBlock({ target: { name: "Noodle" } })],
+  "sanction-muted": ["Sanction", "Muted for 3 hours", () => sanction.show({ kind: "muted", reason: "language", until: new Date(Date.now() + 3 * 3600e3), playerName: "Biscuit" })],
+  "sanction-banned": ["Sanction", "Banned, no end date", () => sanction.show({ kind: "banned", reason: "bullying", until: null, playerName: "Biscuit" })],
+  "rooms": ["Quick Play", "Room list", () => roomlist.open({ rooms: ROOMS, on: roomOn })],
+  "rooms-empty": ["Quick Play", "No rooms", () => roomlist.open({ rooms: [], on: roomOn })],
+  "rooms-loading": ["Quick Play", "Still loading", () => { setTimeout(() => roomlist.update(ROOMS), 5000); return roomlist.open({ rooms: null, on: roomOn }); }],
+  "rooms-pass": ["Quick Play", "Private room asks for the pass", async () => { const p = roomlist.open({ rooms: ROOMS, on: roomOn }); await wait(400); document.querySelector('[data-join="r4"]').click(); return p; }],
+  "rooms-create": ["Quick Play", "Create a private room", async () => { const p = roomlist.open({ rooms: ROOMS, on: roomOn }); await wait(400); document.querySelector(".scr-rl-big.make").click(); await wait(300); document.querySelector('.scr-roomcreate [data-value="private"]').click(); return p; }],
+  "confirm-kick": ["Confirm", "Kick this player?", () => confirm({ title: "Kick Biscuit?", message: "They leave the room and can join again with the code.", yes: "Kick", danger: true, art: "door" })],
+  "confirm-leave": ["Confirm", "Leave the room?", () => confirm({ title: "Leave the room?", message: "The game goes on without you.", yes: "Leave", no: "Stay" })],
+};
+
+const groups = {};
+for (const [name, [group, label, run]] of Object.entries(S)) {
+  if (!groups[group]) { groups[group] = document.createElement("section"); groups[group].innerHTML = `<h2>${group}</h2>`; $("#grid").append(groups[group]); }
+  const b = document.createElement("button"); b.textContent = label; b.dataset.state = name;
+  b.onclick = async () => log(name, await run()); groups[group].append(b);
+}
+settings.onChange((d) => log("setting changed", `${d.path} = ${JSON.stringify(d.value)}`));
+$("#hud").append(settings.gearButton({ onClick: () => window.demo.open("settings") }));
+window.demo = { open: (name) => S[name][2]().then((v) => log(name, v)), states: Object.keys(S) };
+if (params.get("open")) window.demo.open(params.get("open"));
+</script>
+</body>
+</html>

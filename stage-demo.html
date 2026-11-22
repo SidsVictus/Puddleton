@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0b24">
+<title>Puddleton stage demo</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fonts/fonts.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<style>
+  html, body { margin: 0; height: 100%; background: #0e0b24; color: #f4f1ff; font-family: "DM Sans", system-ui, sans-serif; overflow: hidden; }
+  #wrap { position: fixed; inset: 0; }
+  #stage { width: 100%; height: 100%; display: block; }
+  #panel { position: fixed; left: 0; right: 0; bottom: 0; max-height: 40vh; overflow: auto; padding: 8px 10px 12px; background: rgba(14, 11, 36, .86); border-top: 2px solid #3a2f6a; z-index: 5; }
+  body.clean #panel, body.clean #toggle, body.clean #hud { display: none; }
+  #toggle { position: fixed; right: 8px; top: 8px; z-index: 6; }
+  #hud { position: fixed; left: 8px; top: 8px; z-index: 6; font: 14px "Jersey 20", monospace; color: #cfc6ff; pointer-events: none; text-shadow: 1px 1px 0 #000; }
+  h3 { margin: 8px 0 4px; font: 400 17px "Jersey 20", monospace; letter-spacing: 1px; color: #ffd98a; }
+  button, select { font: 500 13px "DM Sans", sans-serif; color: #f4f1ff; background: #2a2250; border: 1px solid #5a4aa0; border-radius: 6px; padding: 5px 8px; margin: 2px; cursor: pointer; }
+  button:active { background: #4a3a90; }
+  label { font-size: 13px; margin-right: 8px; }
+  #shop { position: fixed; inset: 0; z-index: 8; background: #171233; overflow: auto; padding: 12px; display: none; }
+  #shop.on { display: block; }
+  #shop figure { display: inline-block; width: 104px; margin: 4px; text-align: center; font-size: 11px; vertical-align: top; }
+  #shop img { width: 96px; height: 96px; image-rendering: pixelated; background: #2a2250; border-radius: 8px; display: block; margin: 0 auto 2px; }
+  #shop .lock { color: #ffb0c0; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="stage"></canvas></div>
+<div id="hud"></div>
+<button id="toggle">Hide panel</button>
+<div id="panel">
+  <h3>Town</h3>
+  <label>Players <select id="count"><option>4</option><option>6</option><option selected>8</option><option>12</option><option>16</option></select></label>
+  <span id="phases"></span>
+  <button data-do="ghosts">Ghosts on/off</button><button data-do="skip">Skip scene</button><button data-do="shop">Shop thumbnails</button>
+  <h3>Chat and emotes (tap ground to walk, tap a bean to point at it, tap a house to knock)</h3>
+  <button data-do="bubble">Chat bubble</button><button data-do="chatter">Everyone talks</button><span id="emotes"></span>
+  <h3>Kill, seen by the victim</h3>
+  <label><input type="checkbox" id="showKiller" checked> show killer</label><span id="kills"></span>
+  <h3>Other night scenes</h3>
+  <button data-do="save">Save</button><button data-do="save-piano">Save from piano</button><button data-do="save-vig">Save from pebble</button><button data-do="angel">Angel</button>
+  <button data-do="peek-mafia">Peek: mafia</button><button data-do="peek-innocent">Peek: innocent</button><button data-do="frame">Frame</button>
+  <button data-do="shot-hit">Shot: hit</button><button data-do="shot-miss">Shot: miss</button>
+  <button data-do="dream-sheep">Dream: sheep</button><button data-do="dream-snore">Dream: snore</button><button data-do="dream-talk">Dream: talk</button><button data-do="hideout">Mafia hideout</button>
+  <h3>Dawn, trial, exile, endings</h3>
+  <button data-do="dawn">Dawn: one death and clue</button><button data-do="dawn-all">Dawn: every tomb</button><button data-do="dawn-saved">Dawn: saved</button><button data-do="dawn-quiet">Dawn: quiet</button>
+  <button data-do="trial">Trial</button><button data-do="exile-classic">Exile: balloon</button><button data-do="exile-gore">Exile: catapult</button><button data-do="exile-crazy">Exile: boot</button><button data-do="exile-jester">Exile: jester</button>
+  <button data-do="win-town">Town wins</button><button data-do="win-mafia">Mafia wins</button>
+  <h3>Effects</h3>
+  <span id="fx"></span>
+</div>
+<div id="shop"></div>
+<script type="module">
+import { createStage } from "./stage.mjs";
+import { portrait } from "./world.mjs";
+import { SHOP, RACKS, DEFAULT_LOOK, cleanLook, preview, KILLFX } from "./cosmetics.mjs";
+
+const $ = (s) => document.querySelector(s), q = new URLSearchParams(location.search);
+if (q.has("clean")) document.body.classList.add("clean");
+const NAMES = ["Biscuit", "Mochi", "Pickle", "Waffle", "Peanut", "Noodle", "Sprout", "Pebble", "Tofu", "Maple", "Clover", "Dumpling", "Pudding", "Muffin", "Bean", "Olive"];
+const LOOKS = [
+  { body: "bubblegum", head: "cap", pack: "daypack", house: "match", tomb: "stone", dance: "hop" },
+  { body: "frostbite", head: "wizard", pack: "none", house: "match", tomb: "ufo", dance: "twirl" },
+  { body: "butter", head: "none", pack: "teddy", house: "mushroom", tomb: "bloom", dance: "stomp" },
+  { body: "mint", head: "cowboy", pack: "none", house: "paint-lagoon", tomb: "casket", dance: "wiggle" },
+  { body: "lilac", head: "crown", pack: "bat", house: "haunted", tomb: "ghostpop", dance: "moonwaddle" },
+  { body: "peach", head: "chef", pack: "boba", house: "bakery", tomb: "shatter", dance: "flip" },
+  { body: "cobalt", head: "propeller", pack: "rocket", house: "lighthouse", tomb: "stone", dance: "hop" },
+  { body: "glowstick", head: "none", pack: "none", house: "match", tomb: "bloom", dance: "wiggle" },
+  { body: "cherry", head: "pirate", pack: "chest", house: "paint-honeycomb", tomb: "stone", dance: "stomp" },
+  { body: "seafoam", head: "bunny", pack: "mini", house: "paint-rosehip", tomb: "ghostpop", dance: "twirl" },
+  { body: "wraith", head: "witch", pack: "coffin", house: "match", tomb: "casket", dance: "flip" },
+  { body: "snowdrop", head: "beanie", pack: "none", house: "paint-bluebell", tomb: "ufo", dance: "hop" },
+  { body: "cocoa", head: "sombrero", pack: "explorer", house: "paint-tangerine", tomb: "shatter", dance: "moonwaddle" },
+  { body: "strawberrymilk", head: "flowers", pack: "none", house: "match", tomb: "bloom", dance: "wiggle" },
+  { body: "limefizz", head: "viking", pack: "turtle", house: "paint-plumjam", tomb: "stone", dance: "stomp" },
+  { body: "charcoal", head: "headphones", pack: "none", house: "paint-marshmallow", tomb: "casket", dance: "twirl" },
+];
+const hud = $("#hud");
+const stage = createStage($("#stage"), {
+  onTap(hit) {
+    hud.textContent = `tap: ${hit.type}${hit.id ? " " + hit.id : ""} (${hit.x.toFixed(1)}, ${hit.z.toFixed(1)})`;
+    if (hit.type === "ground") stage.walkTo("p0", hit.x, hit.z);
+    else if (hit.type === "bean" && hit.id !== "p0") stage.emote("p0", "point", hit.id);
+    else if (hit.type === "house") stage.bubble(hit.id, "Who is it?");
+  },
+});
+let list = [], picks = {};
+function build(n, phase = "day") {
+  list = Array.from({ length: n }, (_, i) => ({ id: "p" + i, name: NAMES[i], look: cleanLook(LOOKS[i]), alive: true, me: i === 0 }));
+  stage.setPhase(phase); stage.setPlayers(list);
+}
+const P = (i) => "p" + (i % list.length);
+const night = () => { if (stage.phase !== "night") stage.setPhase("night"); };
+const LINES = ["I was home all night, honest.", "Biscuit looks nervous.", "Who knocked on my door?", "It was not me!", "I saw a tiny fedora...", "Vote Pickle. Trust me."];
+const DO = {
+  ghosts() { DO.g = !DO.g; list.forEach((p) => stage.setGhost(p.id, DO.g)); },
+  skip() { stage.skip(); },
+  bubble() { stage.bubble(P(0), LINES[(Math.random() * LINES.length) | 0]); },
+  chatter() { list.forEach((p, i) => setTimeout(() => stage.bubble(p.id, LINES[i % LINES.length]), i * 250)); },
+  save() { night(); return stage.playSave({ target: P(2), cause: "mallet" }); },
+  "save-piano"() { night(); return stage.playSave({ target: P(2), cause: "piano" }); },
+  "save-vig"() { night(); return stage.playSave({ target: P(2), cause: "vigilante" }); },
+  angel() { night(); return stage.playAngel({ target: P(3) }); },
+  "peek-mafia"() { night(); return stage.playPeek({ target: P(4), result: "mafia" }); },
+  "peek-innocent"() { night(); return stage.playPeek({ target: P(1), result: "innocent" }); },
+  frame() { night(); return stage.playFrame({ target: P(5) }); },
+  "shot-hit"() { night(); return stage.playShot({ target: P(2), hit: true }); },
+  "shot-miss"() { night(); return stage.playShot({ target: P(2), hit: false }); },
+  "dream-sheep"() { night(); return stage.playDream({ kind: "sheep" }); },
+  "dream-snore"() { night(); return stage.playDream({ kind: "snore" }); },
+  "dream-talk"() { night(); return stage.playDream({ kind: "talk" }); },
+  hideout() {
+    night(); picks = { [P(1)]: P(3) };
+    return stage.playHideout({ members: [P(0), P(1)], picks, onPick(id) { picks = { ...picks, [P(0)]: id }; stage.setHideoutPicks(picks); hud.textContent = "picked " + id; } });
+  },
+  dawn() { return stage.playDawn({ dead: [{ id: P(3), role: "detective" }], clue: { trait: "head", value: "cowboy" } }); },
+  "dawn-all"() { return stage.playDawn({ dead: ["stone", "ghostpop", "bloom", "shatter", "casket", "ufo"].slice(0, list.length - 2).map((tomb, i) => ({ id: P(i + 1), tomb, role: ["villager", "angel", "mafia", "jester", "vigilante", "mayor"][i] })), clue: { trait: "body", value: "cobalt" } }); },
+  "dawn-saved"() { return stage.playDawn({ saved: true, clue: { trait: "pack", value: "teddy" } }); },
+  "dawn-quiet"() { return stage.playDawn({}); },
+  trial() { return stage.playTrial({ accused: P(2) }).then(() => stage.bubble(P(2), "I am just a humble villager!")); },
+  "exile-classic"() { return stage.playExile({ id: P(2), mode: "classic" }); },
+  "exile-gore"() { return stage.playExile({ id: P(2), mode: "gore" }); },
+  "exile-crazy"() { return stage.playExile({ id: P(2), mode: "crazy" }); },
+  "exile-jester"() { return stage.playExile({ id: P(2), mode: "classic", jester: true }); },
+  "win-town"() { return stage.playVictory({ winners: list.filter((_, i) => i % 2 === 0).map((p) => p.id), team: "town" }); },
+  "win-mafia"() { return stage.playVictory({ winners: [P(0), P(1), P(4)], team: "mafia" }); },
+  shop() { shop(); },
+};
+const kill = (method) => { night(); return stage.playKill({ victim: P(0), killer: P(1), method, showKiller: $("#showKiller").checked }); };
+$("#phases").innerHTML = ["night", "dawn", "day", "trial", "ended"].map((p) => `<button data-phase="${p}">${p}</button>`).join("");
+$("#emotes").innerHTML = stage.emotes.map((e) => `<button data-emote="${e}">${e}</button>`).join("");
+$("#kills").innerHTML = stage.kills.map((k) => `<button data-kill="${k}">${k}</button>`).join("");
+const FX = {
+  sparks: (f) => f.burst("spark", 0, 1, 0, 24), dust: (f) => f.burst("dust", 0, 0.2, 0, 24, { flat: true, sp: 2 }), confetti: (f) => f.burst("confetti", 0, 1, 0, 60), smoke: (f) => f.burst("smoke", 0, 0.5, 0, 24),
+  feathers: (f) => f.burst("feather", 0, 1.5, 0, 30), petals: (f) => f.burst("petal", 0, 1, 0, 30), shards: (f) => f.burst("shard", 0, 1, 0, 30), fire: (f) => f.burst("fire", 0, 0.6, 0, 30),
+  shake: (f) => f.shake(0.4), flash: (f) => f.flash("#ffffff", 0.9, 0.3), "slow motion": (f) => { f.slowmo(0.25, 1.2); f.burst("confetti", 0, 1, 0, 60); }, ring: (f) => f.ring(0, 0.08, 0, "#ffe14a", 4, 0.6),
+  impact: (f) => f.impact(0, 0, 0, 1.5), glow: (f) => f.glow(0, 2, 0, "#ff5d8f", 30, 0.8), icons: (f) => ["heart", "zed", "bang", "quest", "anger", "drop", "note", "star", "skull", "ha", "hand", "swirl", "arrow"].forEach((n, i) => f.icon(n, (i - 6) * 0.6, 1.5, 0, { ttl: 2.5, vy: 0.2, s: 0.5 })),
+};
+$("#fx").innerHTML = Object.keys(FX).map((k) => `<button data-fx="${k}">${k}</button>`).join("");
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.do) DO[b.dataset.do]();
+  else if (b.dataset.phase) stage.setPhase(b.dataset.phase);
+  else if (b.dataset.emote) stage.emote(P(0), b.dataset.emote, P(1));
+  else if (b.dataset.kill) kill(b.dataset.kill);
+  else if (b.dataset.fx) FX[b.dataset.fx](stage.fx);
+});
+$("#count").addEventListener("change", (e) => build(+e.target.value, stage.phase));
+$("#toggle").addEventListener("click", () => { const p = $("#panel"); p.hidden = !p.hidden; $("#toggle").textContent = p.hidden ? "Show panel" : "Hide panel"; });
+function shop() {
+  const el = $("#shop"); el.classList.toggle("on"); if (!el.classList.contains("on")) return;
+  const look = cleanLook(LOOKS[1]);
+  el.innerHTML = '<button data-do="shop">Close</button>' + Object.entries(SHOP).map(([rack, items]) => `<h3>${rack}</h3>` + items.map((it) => `<figure><img alt="" src="${preview(rack, it.id, look)}">${it.name}${it.locked ? ' <span class="lock">(locked)</span>' : ""}</figure>`).join("")).join("")
+    + "<h3>portrait() still works</h3>" + ["mafia", "angel", "detective", "jester", "godfather", "serialkiller", null].map((r, i) => `<figure><img alt="" src="${portrait(r, cleanLook(LOOKS[i]))}">${r || "plain"}</figure>`).join("")
+    + RACKS.head.map((h) => `<figure><img alt="" src="${portrait(null, { ...DEFAULT_LOOK, head: h.id })}">${h.name}</figure>`).join("") + RACKS.pack.map((h) => `<figure><img alt="" src="${portrait(null, { ...DEFAULT_LOOK, pack: h.id }, false, "back")}">${h.name}</figure>`).join("");
+}
+build(+(q.get("n") || 8), q.get("phase") || "day");
+Object.assign(window, { stage, DO, kill, build, FX, P });   // handles for the test scripts
+if (q.has("shop")) shop();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Local development secrets. Copy to .dev.vars (never commit .dev.vars).
+# Cloudflare's documented Turnstile test secret: always passes.
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+ADMIN_TOKEN=local-admin-token-change-me
+HASH_SALT=local-hash-salt-change-me
