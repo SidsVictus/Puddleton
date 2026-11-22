@@ -1,32 +1,55 @@
-"""Generates the pixel-art scene backdrops in ../scenes as small animated SVG files.
-Each scene is laid out on a 320 x 180 art grid and rasterized at S fine pixels per art unit (a 960 x 540 viewBox),
-drawn with crisp staircase outlines, fine dither patterns and CSS animation.
+"""Generates the scene backdrops as small animated SVG files, in two looks that follow the picture quality setting:
+  ../scenes/{name}.svg      High: smooth anti-aliased polygons and flat tone bands, like the 3D beans
+  ../scenes/low/{name}.svg  Low: chunky square pixels (a 480 x 270 grid, about 3 CSS px each), dithered, crisp edges
+Each scene is laid out on a 320 x 180 art grid and sampled in fine rows, S per art unit (a 960 x 540 viewBox in both looks).
+Shapes are lists of spans (fine row, x0, x1) with exact x edges: High draws each outline as a polygon through the row centres,
+Low folds every 2 x 2 fine pixels into one coarse pixel by coverage, so the two looks share one composition.
 Run: python tools/scenes.py"""
 import math, os, random
 
-S = 3                   # fine pixels per art unit
+S = 3                   # fine rows per art unit
 P = 1 / S               # one fine pixel, in art units
 W, H = 320, 180         # the art grid
+MODE = "high"           # the look being drawn: "high" or "low"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scenes")
-# animation distances are in fine pixels (3 per art unit), so motion matches the art grid
-CSS = """
+# animation distances are in fine pixels (3 per art unit). Low steps whole coarse pixels (2 fine). High steps finely: the game
+# redraws the whole backdrop each time anything in it changes, so every High step and delay is a whole number of tenths of a
+# second (keyframes placed to match, eased moves sampled into keyframes); all changes then share one clock, 10 redraws a second at most.
+CSS = {"high": """
+.tw{animation:tw 4s steps(4) infinite}@keyframes tw{50%{opacity:.15}}
+.blink{animation:bl 9s steps(1) infinite}@keyframes bl{0%,78%{opacity:1}78.8889%,100%{opacity:.12}}
+.flick{animation:fl 1.4s steps(7) infinite}@keyframes fl{50%{opacity:.55}}
+.drift{animation:dr 140s steps(1400) infinite}@keyframes dr{from{transform:translateX(-360px)}to{transform:translateX(1320px)}}
+.slow{animation-duration:260s;animation-timing-function:steps(2600)}
+.smoke{animation:sm 5s steps(50) infinite}@keyframes sm{from{transform:translate(0,0);opacity:.9}to{transform:translate(12px,-48px);opacity:0}}
+.sway{animation:sw 2.4s steps(6) infinite alternate}@keyframes sw{to{transform:translateY(3px)}}
+.bob{animation:bo 6s steps(30) infinite alternate}@keyframes bo{to{transform:translateY(-12px)}}
+.spark{animation:sp 2.2s steps(11) infinite}@keyframes sp{50%{opacity:0}}
+.fw{transform-box:fill-box;transform-origin:center;animation:fw 3.2s steps(4) infinite}@keyframes fw{0%{transform:scale(.1);opacity:0}12.5%{transform:scale(.465);opacity:1}25%{transform:scale(.709)}37.5%{transform:scale(.844)}50%{transform:scale(.919)}62.5%{transform:scale(.962)}75%{transform:scale(.985);opacity:1}87.5%{transform:scale(.997)}100%{transform:scale(1);opacity:0}}
+.fall{animation:fa 7s steps(70) infinite}@keyframes fa{from{transform:translateY(-90px)}to{transform:translateY(600px)}}
+.ff{animation:ff 5s steps(25) infinite alternate}@keyframes ff{0%{transform:translate(0,0);opacity:0}50%{opacity:1}100%{transform:translate(15px,-21px);opacity:.2}}
+.eyes{animation:ey 11s steps(1) infinite}@keyframes ey{0%,88%{opacity:0}89.0909%,93%{opacity:1}93.6364%{opacity:0}94.5455%,98%{opacity:1}99.0909%{opacity:0}}
+.spin{transform-box:fill-box;transform-origin:center;animation:spn 8s steps(80) infinite}@keyframes spn{to{transform:rotate(360deg)}}
+.tick{transform-origin:480px 240px;animation:tk 1s steps(2) infinite alternate}@keyframes tk{from{transform:rotate(-8deg)}20%{transform:rotate(-6.69deg)}40%{transform:rotate(-2.69deg)}60%{transform:rotate(2.69deg)}80%{transform:rotate(6.69deg)}to{transform:rotate(8deg)}}
+.shoot{animation:sh 13s steps(26) infinite,sho 13s steps(5) infinite}@keyframes sh{0%,80%{transform:translate(0,0)}100%{transform:translate(-270px,135px)}}@keyframes sho{0%,80%{opacity:0}80.7692%{opacity:1}100%{opacity:0}}
+""", "low": """
 .tw{animation:tw 4s steps(1) infinite}@keyframes tw{50%{opacity:.15}}
 .blink{animation:bl 9s steps(1) infinite}@keyframes bl{0%,78%{opacity:1}79%,100%{opacity:.12}}
 .flick{animation:fl 1.4s steps(2) infinite}@keyframes fl{50%{opacity:.55}}
-.drift{animation:dr 140s steps(1680) infinite}@keyframes dr{from{transform:translateX(-360px)}to{transform:translateX(1320px)}}
+.drift{animation:dr 140s steps(840) infinite}@keyframes dr{from{transform:translateX(-360px)}to{transform:translateX(1320px)}}
 .slow{animation-duration:260s}
-.smoke{animation:sm 5s steps(24) infinite}@keyframes sm{from{transform:translate(0,0);opacity:.9}to{transform:translate(12px,-48px);opacity:0}}
-.sway{animation:sw 2.4s steps(3) infinite alternate}@keyframes sw{to{transform:translateY(3px)}}
-.bob{animation:bo 6s steps(12) infinite alternate}@keyframes bo{to{transform:translateY(-12px)}}
+.smoke{animation:sm 5s steps(6) infinite}@keyframes sm{from{transform:translate(0,0);opacity:.9}to{transform:translate(12px,-48px);opacity:0}}
+.sway{animation:sw 2.4s steps(2) infinite alternate}@keyframes sw{to{transform:translateY(4px)}}
+.bob{animation:bo 6s steps(6) infinite alternate}@keyframes bo{to{transform:translateY(-12px)}}
 .spark{animation:sp 2.2s steps(1) infinite}@keyframes sp{50%{opacity:0}}
-.fw{transform-box:fill-box;transform-origin:center;animation:fw 3.2s steps(12) infinite}@keyframes fw{0%{transform:scale(.1);opacity:0}10%{opacity:1}70%{opacity:1}100%{transform:scale(1);opacity:0}}
-.fall{animation:fa 7s steps(84) infinite}@keyframes fa{from{transform:translateY(-90px)}to{transform:translateY(600px)}}
-.ff{animation:ff 5s steps(20) infinite alternate}@keyframes ff{0%{transform:translate(0,0);opacity:0}30%{opacity:1}100%{transform:translate(15px,-21px);opacity:.2}}
+.fw{transform-box:fill-box;transform-origin:center;animation:fw 3.2s steps(6) infinite}@keyframes fw{0%{transform:scale(.1);opacity:0}10%{opacity:1}70%{opacity:1}100%{transform:scale(1);opacity:0}}
+.fall{animation:fa 7s steps(69) infinite}@keyframes fa{from{transform:translateY(-90px)}to{transform:translateY(600px)}}
+.ff{animation:ff 5s steps(4) infinite alternate}@keyframes ff{0%{transform:translate(0,0);opacity:0}30%{opacity:1}100%{transform:translate(16px,-24px);opacity:.2}}
 .eyes{animation:ey 11s steps(1) infinite}@keyframes ey{0%,88%{opacity:0}89%,93%{opacity:1}94%{opacity:0}95%,98%{opacity:1}99%{opacity:0}}
 .spin{transform-box:fill-box;transform-origin:center;animation:spn 8s steps(24) infinite}@keyframes spn{to{transform:rotate(360deg)}}
 .tick{transform-origin:480px 240px;animation:tk 1s steps(6) infinite alternate}@keyframes tk{from{transform:rotate(-8deg)}to{transform:rotate(8deg)}}
-.shoot{animation:sh 13s steps(52) infinite}@keyframes sh{0%,80%{transform:translate(0,0);opacity:0}81%{opacity:1}100%{transform:translate(-270px,135px);opacity:0}}
-"""
+.shoot{animation:sh 13s steps(68) infinite}@keyframes sh{0%,80%{transform:translate(0,0);opacity:0}81%{opacity:1}100%{transform:translate(-272px,136px);opacity:0}}
+"""}
 
 
 def fx(v):   # art units to the nearest fine pixel edge
@@ -38,11 +61,44 @@ def mix(a, b, t):   # blend two #rrggbb colours
     return "#%02x%02x%02x" % tuple(round(((a >> k) & 255) * (1 - t) + ((b >> k) & 255) * t) for k in (16, 8, 0))
 
 
-# ---- shapes as fine-pixel spans: lists of (fine y, fine x0, fine x1) ----
+def num(v):   # a short coordinate
+    s = f"{v:.2f}".rstrip("0").rstrip(".")
+    return "0" if s in ("", "-0") else s
+
+
+def line(pts):   # open polyline path data
+    return "M" + " ".join(f"{num(x)} {num(y)}" for x, y in pts)
+
+
+def simplify(pts, eps):   # Douglas Peucker: drop points within eps of the line through their neighbours
+    keep = [False] * len(pts)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(pts) - 1)]
+    while stack:
+        i, j = stack.pop()
+        (x1, y1), (x2, y2) = pts[i], pts[j]
+        dx, dy = x2 - x1, y2 - y1
+        n = math.hypot(dx, dy)
+        best, bi = -1, -1
+        for k in range(i + 1, j):
+            px, py = pts[k]
+            d = abs(dy * (px - x1) - dx * (py - y1)) / n if n else math.hypot(px - x1, py - y1)
+            if d > best:
+                best, bi = d, k
+        if best > eps:
+            keep[bi] = True
+            stack += [(i, bi), (bi, j)]
+    return [p for p, k in zip(pts, keep) if k]
+
+
+def edge(v):   # a fine pixel edge to the nearest coarse (2 fine) pixel edge
+    return math.floor(v / 2 + 0.5)
+
+
+# ---- shapes as fine spans: lists of (fine row, x0, x1); x edges are exact, in fine pixels ----
 
 def box(x, y, w, h):
-    a, b = fx(x), fx(x + w)
-    return [(fy, a, b) for fy in range(fx(y), fx(y + h))] if b > a else []
+    return [(fy, x * S, (x + w) * S) for fy in range(fx(y), fx(y + h))] if w > 0 else []
 
 
 def ell(cx, cy, rx, ry):
@@ -51,9 +107,7 @@ def ell(cx, cy, rx, ry):
         dy = ((fy + 0.5) / S - cy) / ry
         if abs(dy) < 1:
             hw = rx * math.sqrt(1 - dy * dy)
-            a, b = fx(cx - hw), fx(cx + hw)
-            if b > a:
-                rows.append((fy, a, b))
+            rows.append((fy, (cx - hw) * S, (cx + hw) * S))
     return rows
 
 
@@ -66,10 +120,8 @@ def poly(pts):   # convex polygon
             (x1, y1), (x2, y2) = pts[i], pts[(i + 1) % n]
             if (y1 <= yc < y2) or (y2 <= yc < y1):
                 xs.append(x1 + (yc - y1) * (x2 - x1) / (y2 - y1))
-        if len(xs) >= 2:
-            a, b = fx(min(xs)), fx(max(xs))
-            if b > a:
-                rows.append((fy, a, b))
+        if len(xs) >= 2 and max(xs) > min(xs):
+            rows.append((fy, min(xs) * S, max(xs) * S))
     return rows
 
 
@@ -79,9 +131,8 @@ def rrect(x, y, w, h, r):   # rounded rectangle
         yc = (fy + 0.5) / S
         d = min(yc - y, y + h - yc)
         inset = r - math.sqrt(max(0.0, r * r - (r - d) ** 2)) if d < r else 0
-        a, b = fx(x + inset), fx(x + w - inset)
-        if b > a:
-            rows.append((fy, a, b))
+        if w > 2 * inset:
+            rows.append((fy, (x + inset) * S, (x + w - inset) * S))
     return rows
 
 
@@ -103,6 +154,12 @@ def union(*lists):
     return out
 
 
+class Cut(list):   # the spans of a minus b, keeping both: High draws a clipped by b, so thin rims and crescents keep clean edges
+    def __init__(self, spans, a, b):
+        super().__init__(spans)
+        self.a, self.b = a, b
+
+
 def minus(rows, cut):   # spans of rows not covered by cut (cut has one span per row)
     c = {y: (a, b) for y, a, b in cut}
     out = []
@@ -114,19 +171,21 @@ def minus(rows, cut):   # spans of rows not covered by cut (cut has one span per
             out.append((y, a, min(b, ca)))
         if cb < b:
             out.append((y, max(a, cb), b))
-    return [r for r in out if r[2] > r[1]]
+    return Cut([r for r in out if r[2] > r[1]], rows, cut)
 
 
 def clip(rows, y0=-1e9, y1=1e9, x0=-1e9, x1=1e9):   # bounds in art units
-    Y0, Y1, X0, X1 = fx(y0) if y0 > -1e8 else -10 ** 9, fx(y1) if y1 < 1e8 else 10 ** 9, fx(x0) if x0 > -1e8 else -10 ** 9, fx(x1) if x1 < 1e8 else 10 ** 9
-    return [(y, max(a, X0), min(b, X1)) for y, a, b in rows if Y0 <= y < Y1 and min(b, X1) > max(a, X0)]
+    Y0, Y1 = fx(y0) if y0 > -1e8 else -10 ** 9, fx(y1) if y1 < 1e8 else 10 ** 9
+    X0, X1 = x0 * S, x1 * S
+    out = [(y, max(a, X0), min(b, X1)) for y, a, b in rows if Y0 <= y < Y1 and min(b, X1) > max(a, X0)]
+    return Cut(out, clip(rows.a, y0, y1, x0, x1), rows.b) if isinstance(rows, Cut) else out
 
 
 def shift(rows, dx=0, dy=0):   # move by whole fine pixels
     return [(y + dy, a + dx, b + dx) for y, a, b in rows]
 
 
-def outline(spans):   # staircase outline path data, one closed subpath per vertical chain of overlapping spans
+def outline(spans, k=1):   # Low: staircase outline path data of integer spans scaled by k, one closed subpath per vertical chain
     rows = {}
     for y, a, b in spans:
         if b > a:
@@ -144,23 +203,123 @@ def outline(spans):   # staircase outline path data, one closed subpath per vert
     d = []
     for c in chains:
         y0, a0, b0 = c[0]
-        d.append(f"M{a0} {y0}h{b0 - a0}")
+        d.append(f"M{a0 * k} {y0 * k}h{(b0 - a0) * k}")
         v = 1
         for (_, _, b), (_, _, b2) in zip(c, c[1:]):
             if b2 == b:
                 v += 1
             else:
-                d.append(f"v{v}h{b2 - b}"); v = 1
+                d.append(f"v{v * k}h{(b2 - b) * k}"); v = 1
         _, al, bl = c[-1]
-        d.append(f"v{v}h{al - bl}")
+        d.append(f"v{v * k}h{(al - bl) * k}")
         v, rev = 1, c[::-1]
         for (_, a, _), (_, a2, _) in zip(rev, rev[1:]):
             if a2 == a:
                 v += 1
             else:
-                d.append(f"v-{v}h{a2 - a}"); v = 1
+                d.append(f"v-{v * k}h{(a2 - a) * k}"); v = 1
         d.append("z")
     return "".join(d)
+
+
+def smooth(spans):   # High: polygon outline through the row centres, one closed subpath per chain of spans
+    rows = {}
+    for y, a, b in spans:
+        if b > a:
+            rows.setdefault(y, []).append((a, b))
+    for y in rows:
+        rows[y].sort()
+    meets = lambda p, q: p[0] < q[1] and p[1] > q[0]
+    # a chain only runs on one to one, so where spans split or merge the subpaths meet on a flat row edge and leave no gap
+    chains, live = [], {}   # live: index of a span in the row above to its chain
+    for y in sorted(rows):
+        cur, nxt = rows[y], {}
+        prev = rows.get(y - 1, [])
+        for i, s in enumerate(cur):
+            up = [k for k, p in enumerate(prev) if meets(p, s)]
+            if len(up) == 1 and up[0] in live and sum(1 for q in cur if meets(prev[up[0]], q)) == 1:
+                c = live[up[0]]; c.append((y, *s))
+            else:
+                c = [(y, *s)]; chains.append(c)
+            nxt[i] = c
+        live = nxt
+    d = []
+    for c in chains:
+        y0, a0, b0 = c[0]
+        yn, an, bn = c[-1]
+        aT, bT, aB, bB = a0, b0, an, bn
+        if len(c) > 1:   # a free top or bottom carries its slope on half a row, so points and curves stay round
+            lim = lambda v: max(-2.0, min(2.0, v))
+            if not any(meets(p, (a0, b0)) for p in rows.get(y0 - 1, [])):
+                aT, bT = a0 + lim((a0 - c[1][1]) / 2), b0 + lim((b0 - c[1][2]) / 2)
+            if not any(meets(p, (an, bn)) for p in rows.get(yn + 1, [])):
+                aB, bB = an + lim((an - c[-2][1]) / 2), bn + lim((bn - c[-2][2]) / 2)
+            if aT > bT:
+                aT = bT = (aT + bT) / 2
+            if aB > bB:
+                aB = bB = (aB + bB) / 2
+        pts = [(aT, y0), (bT, y0)] + [(b, y + 0.5) for y, a, b in c] + [(bB, yn + 1), (aB, yn + 1)] + [(a, y + 0.5) for y, a, b in reversed(c)]
+        pts = simplify(pts + [pts[0]], 0.08)[:-1]
+        d.append("M" + " ".join(f"{num(x)} {num(y)}" for x, y in pts) + "z")
+    return "".join(d)
+
+
+def coarse(spans):   # Low: fine spans to coarse pixel spans; a pixel is set when at least half covered, thin parts keep one pixel
+    cov, area = {}, 0
+    for y, a, b in spans:
+        if b <= a:
+            continue
+        area += b - a
+        ws = [(y // 2, 0.5)] if y % 2 == 0 else [(y // 2, 0.25), (y // 2 + 1, 0.25)]   # a pixel's window is offset half a fine pixel,
+        for j in range(math.floor((a - 1.5) / 2), math.ceil((b + 0.5) / 2) + 1):     # so it rounds like the rects do
+            ov = min(b, 2 * j + 1.5) - max(a, 2 * j - 0.5)
+            if ov > 0:
+                for k, w in ws:
+                    cov[(j, k)] = cov.get((j, k), 0) + w * ov / 2
+    on = {p for p, c in cov.items() if c >= 0.5 - 1e-9}
+    add = set()
+    for axis in (0, 1) if len(on) * 4 < 0.75 * area else ():   # a thin shape: every column and row run of touched pixels keeps its best one
+        lines = {}
+        for p, c in cov.items():
+            if c > 0.1:
+                lines.setdefault(p[axis], []).append((p[1 - axis], c, p))
+        for items in lines.values():
+            items.sort()
+            run = []
+            for it in items + [None]:
+                if run and (it is None or it[0] != run[-1][0] + 1):
+                    if not any(q[2] in on for q in run):
+                        add.add(max(run, key=lambda q: (q[1], q[0]))[2])
+                    run = []
+                if it:
+                    run.append(it)
+    on |= add
+    if not on and cov:
+        on = {max(cov, key=cov.get)}
+    by = {}
+    for j, k in on:
+        by.setdefault(k, []).append(j)
+    out = []
+    for k, js in by.items():
+        js.sort()
+        start = prev = js[0]
+        for j in js[1:] + [None]:
+            if j is None or j != prev + 1:
+                out.append((k, start, prev + 1))
+                if j is not None:
+                    start = j
+            if j is not None:
+                prev = j
+    return out
+
+
+def crect(x, y, w, h):   # Low: a fine rect to coarse pixels, edges rounded, at least one pixel each way
+    x0, x1, y0, y1 = edge(x), edge(x + w), edge(y), edge(y + h)
+    return (x0, y0, max(1, x1 - x0), max(1, y1 - y0))
+
+
+def sparkle(cx, cy, R, r):   # a four point star
+    return "M" + " ".join(f"{num(cx + math.cos(i * math.pi / 4) * (R if i % 2 == 0 else r))} {num(cy + math.sin(i * math.pi / 4) * (R if i % 2 == 0 else r))}" for i in range(8)) + "z"
 
 
 class Scene:
@@ -169,20 +328,37 @@ class Scene:
         self.rng = random.Random(seed)          # drives the layout (kept as before)
         self.fine = random.Random(seed + 100)   # drives the extra fine detail
 
+    def attrs(self, cls, style):
+        return (f' class="{cls}"' if cls else "") + (f' style="{style}"' if style else "")
+
     def path(self, d, fill, cls="", style=""):
         if d:
-            a = (f' class="{cls}"' if cls else "") + (f' style="{style}"' if style else "")
-            self.out.append(f'<path d="{d}" fill="{fill}"{a}/>')
+            self.out.append(f'<path d="{d}" fill="{fill}"{self.attrs(cls, style)}/>')
 
-    def fruns(self, rects, fill, cls="", style=""):   # rects in fine pixels
+    def stroke(self, d, color, width, cls="", style="", extra=""):   # High only: a smooth line
+        self.out.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{num(width)}"{extra}{self.attrs(cls, style)}/>')
+
+    def oval(self, cx, cy, rx, ry, fill, cls="", style=""):   # High only, in fine pixels
+        self.out.append(f'<ellipse cx="{num(cx)}" cy="{num(cy)}" rx="{num(rx)}" ry="{num(ry)}" fill="{fill}"{self.attrs(cls, style)}/>')
+
+    def emit(self, rects, k, fill, cls, style):   # rects (x, y, w, h) scaled by k into one path
         merged = []
-        for x, y, w, h in sorted((r for r in rects if r[2] > 0 and r[3] > 0), key=lambda r: (r[0], r[2], r[1])):
+        for x, y, w, h in sorted(set(r for r in rects if r[2] > 0 and r[3] > 0), key=lambda r: (r[0], r[2], r[1])):
             m = merged[-1] if merged else None
-            if m and m[0] == x and m[2] == w and m[1] + m[3] == y:
-                m[3] += h
+            if m and m[0] == x and m[2] == w and m[1] + m[3] >= y:
+                m[3] = max(m[3], y + h - m[1])
             else:
                 merged.append([x, y, w, h])
-        self.path("".join(f"M{x} {y}h{w}v{h}h-{w}z" for x, y, w, h in merged), fill, cls, style)
+        self.path("".join(f"M{x * k} {y * k}h{w * k}v{h * k}h-{w * k}z" for x, y, w, h in merged), fill, cls, style)
+
+    def fruns(self, rects, fill, cls="", style=""):   # rects in fine pixels
+        if MODE == "low":
+            self.emit([crect(*r) for r in rects if r[2] > 0 and r[3] > 0], 2, fill, cls, style)
+        else:
+            self.emit(rects, 1, fill, cls, style)
+
+    def cruns(self, rects, fill, cls="", style=""):   # Low only: rects in coarse pixels
+        self.emit(rects, 2, fill, cls, style)
 
     def runs(self, rects, fill, cls="", style=""):   # rects in art units (fine fractions allowed)
         fr = []
@@ -193,46 +369,71 @@ class Scene:
 
     def rect(self, x, y, w, h, c, **k): self.runs([(x, y, w, h)], c, **k)
 
-    def shape(self, rows, fill, cls="", style=""): self.path(outline(rows), fill, cls, style)
+    def shape(self, rows, fill, cls="", style=""):
+        if MODE == "low":
+            self.path(outline(coarse(rows), 2), fill, cls, style)
+        elif isinstance(rows, Cut) and rows:   # the whole shape, clipped to the outside of the cut
+            key = f"c{len(self.pats)}"
+            self.pats[key] = f'<clipPath id="{key}"><path clip-rule="evenodd" d="M-1000 -1000H2000V1600H-1000z{smooth(rows.b)}"/></clipPath>'
+            self.path(smooth(rows.a), fill, cls, (style + ";" if style else "") + f"clip-path:url(#{key})")
+        else:
+            self.path(smooth(rows), fill, cls, style)
 
     def open(self, cls="", style="", tf=""):
-        self.out.append("<g" + (f' class="{cls}"' if cls else "") + (f' style="{style}"' if style else "") + (f' transform="{tf}"' if tf else "") + ">")
+        self.out.append("<g" + self.attrs(cls, style) + (f' transform="{tf}"' if tf else "") + ">")
 
     def close(self): self.out.append("</g>")
 
-    def dither(self, a, b, lvl=2):   # checker of b over a in 1 fine pixel cells: lvl 1, 2, 3 = 25, 50, 75 percent (a=None leaves gaps clear)
+    def dither(self, a, b, lvl=2):   # b over a at lvl 1, 2, 3 = 25, 50, 75 percent (a=None leaves gaps clear)
+        if MODE == "high":   # a flat tone band
+            return mix(a, b, lvl / 4) if a else b + ("40", "80", "bf")[lvl - 1]
         key = f"d{lvl}{(a or 'none').strip('#')}{b.strip('#')}"
-        if key not in self.pats:
+        if key not in self.pats:   # a checker in whole coarse pixels
             cells = [(0, 0), (1, 1), (1, 0)][:lvl]
-            bg = f'<rect width="2" height="2" fill="{a}"/>' if a else ""
-            self.pats[key] = (f'<pattern id="{key}" width="2" height="2" patternUnits="userSpaceOnUse">{bg}'
-                              f'<path d="{"".join(f"M{x} {y}h1v1h-1z" for x, y in cells)}" fill="{b}"/></pattern>')
+            bg = f'<rect width="4" height="4" fill="{a}"/>' if a else ""
+            self.pats[key] = (f'<pattern id="{key}" width="4" height="4" patternUnits="userSpaceOnUse">{bg}'
+                              f'<path d="{"".join(f"M{x * 2} {y * 2}h2v2h-2z" for x, y in cells)}" fill="{b}"/></pattern>')
         return f"url(#{key})"
 
-    def sky(self, bands, y=0):   # flat bands joined by a three step 75 / 50 / 25 percent dither
+    def sky(self, bands, y=0):   # flat bands joined by a three step 75 / 50 / 25 percent blend
         for i, (c, end) in enumerate(bands):
-            self.rect(0, y, W, end - y, c)
+            self.rect(0, y, W, end - y + 1, c)   # one unit of overlap under the next band, so no seam shows between them
             if i:
                 for k, lvl in enumerate((3, 2, 1)):
                     self.rect(0, y + k, W, 1, self.dither(c, bands[i - 1][0], lvl))
             y = end
 
-    def disc(self, cx, cy, r, c, cls="", style="", half=False):   # same footprint as the old row disc, drawn smooth
-        rows = ell(cx, cy + 0.5, r + 0.5, r + 0.5)
-        self.shape(clip(rows, y1=cy + 1) if half else rows, c, cls, style)
+    def disc(self, cx, cy, r, c, cls="", style="", half=False):   # same footprint as the old row disc
+        if MODE == "low":
+            rows = ell(cx, cy + 0.5, r + 0.5, r + 0.5)
+            self.shape(clip(rows, y1=cy + 1) if half else rows, c, cls, style)
+            return
+        X, Y, R = cx * S, (cy + 0.5) * S, (r + 0.5) * S
+        if not half:
+            self.oval(X, Y, R, R, c, cls, style)
+            return
+        yc = (cy + 1) * S   # the top part, cut on a flat chord
+        hw = math.sqrt(max(0.0, R * R - (yc - Y) ** 2))
+        self.path(f"M{num(X - hw)} {num(yc)}A{num(R)} {num(R)} 0 {1 if yc > Y else 0} 1 {num(X + hw)} {num(yc)}z", c, cls, style)
+
+    def star(self, X, Y, c, size, cls="tw", style=""):   # at fine pixel X, Y: size 0 a dot, 1 a bigger dot, 2 a four point sparkle
+        if MODE == "high":
+            if size == 2:
+                self.path(sparkle(X + 0.5, Y + 0.5, 3.6, 0.7), c, cls, style)
+            else:
+                o = 0.5 if size == 0 else 1
+                self.oval(X + o, Y + o, 0.62 + 0.45 * size, 0.62 + 0.45 * size, c, cls, style)
+        else:
+            j, k = X // 2, Y // 2
+            self.cruns([(j - 1, k, 3, 1), (j, k - 1, 1, 3)] if size == 2 else [(j, k, 1, 1)], c, cls, style)
 
     def stars(self, n, ymax, colors=("#fff1cf", "#cfc5ec")):
         for _ in range(n):
             x, y = self.rng.randrange(W), self.rng.randrange(ymax)
             c, big = self.rng.choice(colors), self.rng.random() < 0.15
             X, Y = fx(x) + self.fine.randrange(3), fx(y) + self.fine.randrange(3)
-            if big:
-                rects = [(X - 3, Y, 7, 1), (X, Y - 3, 1, 7), (X - 1, Y - 1, 3, 3)]
-            elif self.fine.random() < 0.4:
-                rects = [(X, Y, 2, 2)]
-            else:
-                rects = [(X, Y, 1, 1)]
-            self.fruns(rects, c, "tw", f"animation-delay:-{self.rng.random() * 4:.1f}s")
+            size = 2 if big else (1 if self.fine.random() < 0.4 else 0)
+            self.star(X, Y, c, size, "tw", f"animation-delay:-{self.rng.random() * 4:.1f}s")
 
     def cloud(self, x, y, w, c, shade, cls="drift", delay=0):   # round puffs on a flat, shaded underside
         self.open(cls, f"animation-delay:-{delay}s")
@@ -247,7 +448,7 @@ class Scene:
         self.shape([r for r in rows if r[0] == sh - 1], self.dither(c, shade))
         self.close()
 
-    def roof(self, x, w, base, c, steep=1, rim=None, tiles=None):   # a staircase gable, one fine row per step
+    def roof(self, x, w, base, c, steep=1, rim=None, tiles=None):   # a gable, one fine row per step
         X, B = fx(x), fx(base)
         Wd = fx(x + w) - X
         rows, i = [], 0
@@ -255,7 +456,7 @@ class Scene:
             rows.append((B - 1 - i, X + i * steep, X + Wd - i * steep)); i += 1
         self.shape(rows, c)
         if rim:   # light catching the right hand slope
-            self.fruns([(b - steep - 1, y, steep + 1, 1) for y, a, b in rows], rim)
+            self.shape([(y, b - steep - 1, b) for y, a, b in rows], rim)
         if tiles:   # rows of shingles
             self.fruns([(a + 2, y, b - a - 4, 1) for y, a, b in rows if (B - 1 - y) % 6 == 5 and b - a > 6], tiles)
         return (B - i) / S
@@ -272,7 +473,7 @@ class Scene:
                 t = (fy - T + 0.5) / (Bt - T)
                 saw = (t * 3) % 1   # each tier droops in three layers
                 hw = (0.6 + t * spread) * S * (0.86 + 0.14 * saw) + 0.5 * S
-                rows.append((fy, round(C - hw), round(C + hw)))
+                rows.append((fy, C - hw, C + hw))
         rows += box(cx - 1, base - h // 6, 3, h // 6)
         self.shape(union(rows), c)
 
@@ -318,31 +519,36 @@ class Scene:
         self.lantern(cx, base - 36, 3.33, 6, post, light)
 
     def rope(self, f, x0, x1, c, t=1, dark=None):   # a line y = f(x) in art units, t fine pixels thick; dark marks every third pixel
-        cols, twist = [], []
-        prev = None
-        for X in range(fx(x0), fx(x1)):
-            Y = math.floor(f((X + 0.5) / S) * S)
-            top, bot = Y, Y + t
+        if MODE == "high":
+            X0, X1 = fx(x0), fx(x1)
+            pts = simplify([(X, f(X / S) * S + t / 2 - 0.5) for X in range(X0, X1 + 1)], 0.05)
+            self.stroke(line(pts), c, t)
+            if dark:   # the twist: short dark dashes along the lower edge
+                low = [(x, y + t / 2 - 0.5) for x, y in pts]
+                self.stroke(line(low), dark, 1, extra=f' stroke-dasharray="1 2" stroke-dashoffset="{(3 - (-X0) % 3) % 3}"')
+            return
+        cols, twist, prev = [], [], None
+        tc = max(1, t // 2)
+        for j in range(edge(fx(x0)), edge(fx(x1))):   # Low: drawn straight on the coarse grid
+            Y = edge(f((2 * j + 1) / S) * S - 0.5)
+            top, bot = Y, Y + tc
             if prev is not None and Y > prev + 1:
                 top = prev + 1
             if prev is not None and Y < prev - 1:
                 bot = prev
-            cols.append((X, top, 1, bot - top))
-            if dark and X % 3 == 0:
-                twist.append((X, Y + t - 1, 1, 1))
+            cols.append((j, top, 1, bot - top))
+            if dark and j % 3 == 0:
+                twist.append((j, Y + tc - 1, 1, 1))
             prev = Y
-        runs, cur = [], None
-        for X, top, w, h in cols:
-            if cur and cur[1] == top and cur[3] == h and cur[0] + cur[2] == X:
-                cur[2] += 1
-            else:
-                cur = [X, top, 1, h]; runs.append(cur)
-        self.fruns([tuple(r) for r in runs], c)
+        self.cruns(cols, c)
         if twist:
-            self.fruns(twist, dark)
+            self.cruns(twist, dark)
 
     def string(self, f, y0, y1, c, cls="", style=""):   # a 1 fine pixel vertical line x = f(y)
-        self.fruns([(math.floor(f((Y + 0.5) / S) * S), Y, 1, 1) for Y in range(fx(y0), fx(y1))], c, cls, style)
+        if MODE == "high":
+            self.stroke(line(simplify([(f(Y / S) * S, Y) for Y in range(fx(y0), fx(y1) + 1)], 0.05)), c, 1, cls, style)
+        else:
+            self.cruns([(math.floor(f((2 * k + 1) / S) * S / 2), k, 1, 1) for k in range(edge(fx(y0)), edge(fx(y1)))], c, cls, style)
 
     def bunting(self, x1, y1, x2, y2, sag, colors):
         n = int(abs(x2 - x1) / 7)
@@ -355,24 +561,28 @@ class Scene:
         self.close()
 
     def save(self, name):
-        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W * S} {H * S}" preserveAspectRatio="xMidYMax slice" shape-rendering="crispEdges">'
-               f'<defs>{"".join(self.pats.values())}</defs><style>{CSS}</style>{"".join(self.out)}</svg>')
-        os.makedirs(OUT, exist_ok=True)
-        with open(os.path.join(OUT, name), "w", encoding="utf-8") as f:
+        low = MODE == "low"
+        crisp = ' shape-rendering="crispEdges"' if low else ""
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W * S} {H * S}" preserveAspectRatio="xMidYMax slice"{crisp}>'
+               f'<defs>{"".join(self.pats.values())}</defs>'
+               f'<style>{CSS[MODE]}</style>{"".join(self.out)}</svg>')
+        out = os.path.join(OUT, "low") if low else OUT
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, name), "w", encoding="utf-8") as f:
             f.write(svg)
-        print(name, len(svg) // 1024, "KB")
+        print(MODE, name, len(svg) // 1024, "KB")
 
 
-def sprite(rows, X, Y, ch):   # fine pixel runs of one character in a little ascii drawing
+def sprite(rows, X, Y, ch):   # fine spans (row, x0, x1) of one character in a little ascii drawing
     out = []
     for j, row in enumerate(rows):
         k = 0
         while k < len(row):
-            if row[k] == ch:
+            if row[k] in ch:
                 e = k
-                while e < len(row) and row[e] == ch:
+                while e < len(row) and row[e] in ch:
                     e += 1
-                out.append((X + k, Y + j, e - k, 1)); k = e
+                out.append((Y + j, X + k, X + e)); k = e
             else:
                 k += 1
     return out
@@ -410,7 +620,7 @@ CAT_TAIL = ["....##", "....##", "...##.", "...##.", "..##..", "..##..", "..##.."
 
 def glint(s, x, y, w, c, cls="spark", style=""):   # a short water highlight with soft ends
     X, Y, Wd = fx(x), fx(y), fx(x + w) - fx(x)
-    s.fruns([(X + 1, Y, Wd - 2, 1), (X, Y + 1, Wd, 1)], c, cls, style)
+    s.shape([(Y, X + 1, X + Wd - 1), (Y + 1, X, X + Wd)], c, cls, style)
 
 
 def dock():   # lobby: the ferry dock at sunset, where everyone arrives
@@ -430,7 +640,7 @@ def dock():   # lobby: the ferry dock at sunset, where everyone arrives
     s.open("drift slow", "animation-delay:-60s")   # a little sailboat
     s.shape(poly([(239.3, 104), (255, 104), (252.7, 107.7), (241.7, 107.7)]), "#2a1a40")
     s.rect(246, 90.7, 2 * P, 13.3, "#2a1a40")
-    s.shape([(fy, fx(247), fx(247.4 + 5.6 * (((fy + 0.5) / S - 92) / 11) ** 0.6)) for fy in range(fx(92), fx(103.3))], "#fff1cf")
+    s.shape([(fy, 247 * S, (247.4 + 5.6 * (((fy + 0.5) / S - 92) / 11) ** 0.6) * S) for fy in range(fx(92), fx(103.3))], "#fff1cf")
     s.shape(poly([(245.7, 94), (245.7, 103.3), (241, 103.3)]), "#ffcf8a")
     s.rect(246.67, 90.7, 1.67, 1, "#ff6b9a")
     s.close()
@@ -438,7 +648,13 @@ def dock():   # lobby: the ferry dock at sunset, where everyone arrives
     for i in range(3):
         s.open("drift", f"animation-delay:-{20 + i * 7}s")
         bx, by = 40 + i * 9, 50 + (i % 2) * 4
-        s.fruns([(fx(bx) + 1 + k, fx(by) + j, 1, 1) for j, row in enumerate(bird) for k, ch in enumerate(row) if ch == "#"], "#2a1a40")
+        X, Y = fx(bx) + 1, fx(by)
+        if MODE == "high":
+            s.stroke(f"M{X + 0.5} {Y + 2.5}Q{X + 3} {Y - 1} {X + 6} {Y + 2.4}Q{X + 9} {Y - 1} {X + 11.5} {Y + 2.5}", "#2a1a40", 1,
+                     extra=' stroke-linecap="round" stroke-linejoin="round"')
+        else:   # drawn on the coarse grid: two little wings
+            j, k = X // 2, Y // 2
+            s.cruns([(j, k + 1, 1, 1), (j + 1, k, 1, 1), (j + 2, k + 1, 2, 1), (j + 4, k, 1, 1), (j + 5, k + 1, 1, 1)], "#2a1a40")
         s.close()
     # the pier: planks with staggered joints, nail heads, a little grain and a lit front edge
     s.rect(0, 152, W, 28, "#6b4326")
@@ -474,9 +690,14 @@ def rooftops():   # night A: moonlit rooftops
     s.sky([("#070620", 40), ("#100c34", 80), ("#1e1750", 112), ("#33266a", 180)])
     s.stars(90, 115)
     s.open("shoot")   # a falling star, bright head and a fading tail
-    for c, k0, k1 in [("#fff1cf", 0, 7), ("#cfc5ec", 7, 15), ("#6a5aa0", 15, 24)]:
-        s.fruns([(750 + k, 61 - k // 2, 1, 1) for k in range(k0, k1)], c)
-    s.fruns([(749, 61, 2, 2)], "#fff1cf")
+    if MODE == "high":
+        for c, k0, k1, w in [("#fff1cf", 0, 7, 1.6), ("#cfc5ec", 7, 15, 1.2), ("#6a5aa0", 15, 24, 0.8)]:
+            s.stroke(line([(750.5 + k0, 61.5 - k0 / 2), (750.5 + k1, 61.5 - k1 / 2)]), c, w, extra=' stroke-linecap="round"')
+        s.oval(750, 62, 1.2, 1.2, "#fff1cf")
+    else:
+        for c, k0, k1 in [("#fff1cf", 0, 7), ("#cfc5ec", 7, 15), ("#6a5aa0", 15, 24)]:
+            s.fruns([(750 + k, 61 - k // 2, 1, 1) for k in range(k0, k1)], c)
+        s.fruns([(749, 61, 2, 2)], "#fff1cf")
     s.close()
     s.disc(262, 40, 34, s.dither(None, "#2e2770", 1)); s.disc(262, 40, 31, s.dither(None, "#2e2770"))
     s.disc(262, 40, 27, s.dither(None, "#4a3f8a", 1)); s.disc(262, 40, 24, s.dither(None, "#4a3f8a"))
@@ -508,9 +729,14 @@ def rooftops():   # night A: moonlit rooftops
         if i == 3:   # a cat on the tallest roof, tail flicking
             cx, cy = x + w // 2 - 3, top + 1
             X, Y = fx(cx + 3.5) - 10, fx(cy) - len(CAT)
-            s.fruns(sprite(CAT, X, Y, "#") + sprite(CAT, X, Y, "e"), "#0e0b24")
-            s.fruns(sprite(CAT, X, Y, "e"), "#ffe14a", cls="eyes")
-            s.fruns(sprite(CAT_TAIL, X + 18, Y + 9, "#"), "#0e0b24", cls="sway")
+            s.shape(sprite(CAT, X, Y, "#e"), "#0e0b24")
+            if MODE == "high":
+                s.open("eyes")
+                s.oval(X + 7, Y + 6, 1.15, 1, "#ffe14a"); s.oval(X + 13, Y + 6, 1.15, 1, "#ffe14a")
+                s.close()
+            else:
+                s.shape(sprite(CAT, X, Y, "e"), "#ffe14a", cls="eyes")
+            s.shape(sprite(CAT_TAIL, X + 18, Y + 9, "#"), "#0e0b24", cls="sway")
         x += w + 2
     s.save("rooftops.svg")
 
@@ -550,10 +776,14 @@ def woods():   # night B: the whispering woods
             s.pine(160 + side * (128 + k * 18), 180, 110 - k * 12, "#06081a")
     for _ in range(16):
         X, Y = fx(s.rng.randrange(30, 290)), fx(s.rng.randrange(100, 160))
-        s.fruns([(X - 1, Y, 4, 2), (X, Y - 1, 2, 4)], "#d8ff7a", cls="ff", style=f"animation-delay:-{s.rng.random() * 5:.1f}s")
+        style = f"animation-delay:-{s.rng.random() * 5:.1f}s"
+        if MODE == "high":
+            s.oval(X + 1, Y + 1, 1.7, 1.7, "#d8ff7a", "ff", style)
+        else:
+            s.fruns([(X - 1, Y, 4, 2), (X, Y - 1, 2, 4)], "#d8ff7a", cls="ff", style=style)
     for x, y, d in [(26, 120, 0), (290, 112, 4), (60, 104, 7)]:
         X, Y = fx(x), fx(y)
-        s.fruns([(X, Y, 3, 1), (X + 1, Y + 1, 2, 1), (X + 8, Y, 3, 1), (X + 8, Y + 1, 2, 1)], "#ffe14a", cls="eyes", style=f"animation-delay:-{d}s")
+        s.shape([(Y, X, X + 3), (Y + 1, X + 1, X + 3), (Y, X + 8, X + 11), (Y + 1, X + 8, X + 10)], "#ffe14a", cls="eyes", style=f"animation-delay:-{d}s")
     s.save("woods.svg")
 
 
@@ -580,7 +810,7 @@ def square():   # day A: the town square with the clock tower
     s.shape(env, "#ff6b9a")
     C = 262 * S
     for lo, hi in [(-0.62, -0.3), (0.3, 0.62)]:
-        s.shape([(y, round(C + lo * (b - a) / 2), round(C + hi * (b - a) / 2)) for y, a, b in env], "#ffe14a")
+        s.shape([(y, C + lo * (b - a) / 2, C + hi * (b - a) / 2) for y, a, b in env], "#ffe14a")
     s.shape([(y, a, a + 2) for y, a, b in env if b - a > 8], mix("#ff6b9a", "#ffffff", 0.35))
     s.runs([(258.33, 63.67, P, 3), (265.33, 63.67, P, 3)], "#5e3b1f")
     s.shape(rrect(259, 66.33, 6, 3.67, 0.7), "#8a5a34"); s.rect(259, 67.33, 6, P, "#5e3b1f")
@@ -611,9 +841,10 @@ def square():   # day A: the town square with the clock tower
     s.rect(126, 112, 68, 3, "#d8b890"); s.rect(126, 112, 68, P, "#fff6e6"); s.rect(126, 115 - P, 68, P, "#c0a078")
     s.bunting(160, 92, 20, 108, 6, ["#ff6b9a", "#ffe14a", "#6fe3cf", "#8f7bff"])
     s.bunting(160, 92, 300, 108, 6, ["#6fe3cf", "#ff6b9a", "#ffe14a", "#8f7bff"])
-    s.pats["cob"] = ('<pattern id="cob" width="12" height="8" patternUnits="userSpaceOnUse"><rect width="12" height="8" fill="#c9a98a"/>'
-                     '<path d="M0 3h12v1h-12zM0 7h12v1h-12zM5 0h1v3h-1zM11 0h1v3h-1zM2 4h1v3h-1zM8 4h1v3h-1z" fill="#b8957a"/>'
-                     '<path d="M0 0h2v1h-2zM6 0h2v1h-2zM3 4h2v1h-2zM9 4h2v1h-2z" fill="#d6b898"/></pattern>')
+    k = 2 if MODE == "low" else 1   # Low lays the cobbles in whole coarse pixels, so they come out twice the size
+    s.pats["cob"] = (f'<pattern id="cob" width="{12 * k}" height="{8 * k}" patternUnits="userSpaceOnUse"><rect width="{12 * k}" height="{8 * k}" fill="#c9a98a"/>'
+                     f'<path d="{"".join(f"M{x * k} {y * k}h{w * k}v{h * k}h-{w * k}z" for x, y, w, h in [(0, 3, 12, 1), (0, 7, 12, 1), (5, 0, 1, 3), (11, 0, 1, 3), (2, 4, 1, 3), (8, 4, 1, 3)])}" fill="#b8957a"/>'
+                     f'<path d="{"".join(f"M{x * k} {y * k}h{w * k}v{h * k}h-{w * k}z" for x, y, w, h in [(0, 0, 2, 1), (6, 0, 2, 1), (3, 4, 2, 1), (9, 4, 2, 1)])}" fill="#d6b898"/></pattern>')
     s.rect(0, 158, W, 22, "url(#cob)"); s.rect(0, 158, W, 2, "#a07a64"); s.rect(0, 160, W, P, "#b8957a")
     # the fountain: a stone bowl with a lit rim, a spout and dancing droplets
     s.shape(union(box(154.67, 170, 10.67, 8), rrect(150.67, 176.67, 18.67, 3.33, 1)), "#8a8aa8")   # pedestal and plinth
@@ -698,7 +929,7 @@ def finale():   # the end: dawn breaks with fireworks
     s.sky([("#1a1240", 40), ("#3a1f6a", 76), ("#7a347e", 104), ("#d85a7a", 126), ("#ffae76", 180)])
     s.stars(30, 60)
     for i, (cx, cy, c, r) in enumerate([(70, 46, "#ffe14a", 18), (160, 30, "#ff6b9a", 22), (250, 50, "#6fe3cf", 18), (115, 76, "#cdb4ff", 14), (210, 82, "#ffb98a", 14)]):
-        trail, tips = set(), []
+        trail, tips, solid, dots, ends = set(), [], [], [], []
         for k in range(16):   # sixteen streaks, long and short in turn, dotted near the heart and solid toward a bright tip
             a, long = k * math.pi / 8, k % 2 == 0
             r0, r1 = (0.32 if long else 0.45) * r, (1 if long else 0.78) * r
@@ -709,8 +940,21 @@ def finale():   # the end: dawn breaks with fireworks
                     trail.add((round((cx + math.cos(a) * rr) * S), round((cy + math.sin(a) * rr) * S), 1, 1))
             X, Y = round((cx + math.cos(a) * r1) * S), round((cy + math.sin(a) * r1) * S)
             tips += [(X - 1, Y, 3, 1), (X, Y - 1, 1, 3)] if long else [(X, Y, 2, 2)]
-        s.open("fw", f"animation-delay:-{i * 0.65:.2f}s")
-        s.fruns(list(trail), c); s.fruns(tips, mix(c, "#ffffff", 0.55))
+            at = lambda rr: ((cx + math.cos(a) * rr) * S + 0.5, (cy + math.sin(a) * rr) * S + 0.5)
+            m = min(r1, max(r0, 0.62 * r))
+            solid.append(line([at(m), at(r1)]))
+            if m > r0:
+                dots.append(line([at(r0), at(m)]))
+            ends.append((*at(r1), 1.3 if long else 1))
+        d = i * 0.65 if MODE == "low" else round(i * 0.65, 1)   # High delays sit on its 0.1 s clock
+        s.open("fw", f"animation-delay:-{d:.2f}s")
+        if MODE == "high":
+            s.stroke("".join(solid), c, 1, extra=' stroke-linecap="round"')
+            s.stroke("".join(dots), c, 1, extra=' stroke-dasharray="1 1"')
+            for ex, ey, er in ends:
+                s.oval(ex, ey, er, er, mix(c, "#ffffff", 0.55))
+        else:
+            s.fruns(list(trail), c); s.fruns(tips, mix(c, "#ffffff", 0.55))
         s.close()
     x = -4
     for _ in range(12):
@@ -767,7 +1011,7 @@ def boutique():   # the wardrobe: a tiny velvet boutique
         shirt(s, hx, c)
     s.rect(0, 140, W, 40, "#4a2f6a")
     s.runs([(x, y, 8, 8) for y in range(140, 180, 8) for x in range((y // 8) % 2 * 8, W, 16)], "#3a2458")
-    # the half round rug: a dithered fringe around a solid body with a pink ring, the checker floor showing below it
+    # the half round rug: a softened fringe around a solid body with a pink ring, the checker floor showing below it
     s.disc(160, 168, 40, s.dither(None, "#ff6b9a", 1), half=True); s.disc(160, 168, 38.33, s.dither(None, "#ff6b9a"), half=True)
     s.disc(160, 168, 36.67, mix("#4a2f6a", "#ff6b9a", 0.55), half=True)
     s.shape(clip(minus(ell(160, 168.5, 33.5, 33.5), ell(160, 168.5, 33.17, 33.17)), y1=169), "#ff6b9a")
@@ -848,7 +1092,14 @@ def study():   # choosing the narrator: the storyteller's study, where the town 
     for x, y in [(88, 40), (97, 58), (92, 76), (106, 84), (122, 72), (101, 44), (124, 38)]:
         X, Y = fx(x), fx(y)
         big = (x + y) % 3 == 0
-        s.fruns([(X - 1, Y, 3, 1), (X, Y - 1, 1, 3)] if big else [(X, Y, 2, 2)], "#fff1cf", cls="tw", style=f"animation-delay:-{s.rng.random() * 4:.1f}s")
+        style = f"animation-delay:-{s.rng.random() * 4:.1f}s"
+        if MODE == "high":
+            if big:
+                s.path(sparkle(X + 0.5, Y + 0.5, 1.9, 0.55), "#fff1cf", "tw", style)
+            else:
+                s.oval(X + 1, Y + 1, 1, 1, "#fff1cf", "tw", style)
+        else:
+            s.fruns([(X - 1, Y, 3, 1), (X, Y - 1, 1, 3)] if big else [(X, Y, 2, 2)], "#fff1cf", cls="tw", style=style)
     s.rect(105, 33, 2, 60, "#6b4326"); s.rect(83, 62, 46, 2, "#6b4326"); s.rect(105, 33, P, 60, "#8a5a34"); s.rect(83, 62, 46, P, "#8a5a34")
     s.rect(78, 96, 56, 3, "#8a5a34"); s.rect(78, 96, 56, P, "#a8703f"); s.rect(78, 99, 56, P, "#3a2214")
     for x0 in (74, 128):
@@ -913,5 +1164,6 @@ def study():   # choosing the narrator: the storyteller's study, where the town 
     s.save("study.svg")
 
 
-for f in (dock, rooftops, woods, square, market, finale, boutique, study):
-    f()
+for MODE in ("high", "low"):
+    for f in (dock, rooftops, woods, square, market, finale, boutique, study):
+        f()

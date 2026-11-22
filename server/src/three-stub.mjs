@@ -6,3 +6,4 @@ export const DirectionalLight = Stub, Float32BufferAttribute = Stub, Group = Stu
 export const MeshBasicMaterial = Stub, MeshToonMaterial = Stub, OrthographicCamera = Stub, Scene = Stub, Shape = Stub;
 export const ShapeGeometry = Stub, SphereGeometry = Stub, TorusGeometry = Stub, Vector3 = Stub, WebGLRenderer = Stub;
 export const RedFormat = 0, NearestFilter = 0, DoubleSide = 0;
+export const PlaneGeometry = Stub, WebGLRenderTarget = Stub, NoBlending = 0, SRGBColorSpace = "srgb";

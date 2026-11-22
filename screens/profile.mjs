@@ -84,7 +84,7 @@ export async function open(opts = {}) {
           <button class="scr-tile" data-act="copy" aria-label="Copy link"><img src="${icon("copy")}" alt=""><span>Copy</span></button>
           ${can ? `<button class="scr-tile" data-act="share" aria-label="Share link"><img src="${uiIcon("share")}" alt=""><span>Share</span></button>` : ""}</div>
         <p class="scr-note">Send it to someone you know. Each link works once, then a fresh one appears here.
-          ${o.on.resetLink ? `<button class="scr-link" data-act="reset"><img src="${icon("refresh")}" alt="" width="16" height="16">Make a new link</button>` : ""}</p>
+          ${o.on.resetLink ? `<button class="scr-link" data-act="reset"><img src="${icon("refresh", null, true)}" data-sm alt="" width="16" height="16">Make a new link</button>` : ""}</p>
         <p class="scr-pf-flash" role="status">${esc(note)}</p>
       </div>
       ${reqs.length ? `<h3 class="scr-pf-h">Requests <small>${reqs.length}</small></h3>

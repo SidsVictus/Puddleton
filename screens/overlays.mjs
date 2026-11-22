@@ -1,49 +1,55 @@
 // Connection and status screens: connecting, connection interrupted (over the live game, which stays visible),
 // room not found, new version available, under maintenance, offline, and the island is full.
 // Only one of each kind is open at a time; opening one again replaces it. closeAll() clears them all.
-import { layer, esc, nextId, uiIcon, icon, asset, bean, miniBean, pixels, BEAN_COLORS, nextUtcMidnight, fmtClock, fmtCountdown } from "./base.mjs";
+import { layer, esc, nextId, uiIcon, icon, asset, bean, pic, BEAN_COLORS, nextUtcMidnight, fmtClock, fmtCountdown } from "./base.mjs";
 
 const live = new Map();   // kind -> handle with close()
-// The "no signal" icon is shown when the network is gone, so it is read once now, while it is still here, and used
-// from memory as a data URL (an <img> made later with its plain URL would fail offline).
-let noSignal = icon("nosignal");
-if (typeof fetch === "function") fetch(noSignal).then((r) => (r.ok ? r.text() : null)).then((t) => { if (t) noSignal = "data:image/svg+xml," + encodeURIComponent(t); }).catch(() => {});
+// The "no signal" icon is shown when the network is gone, so both looks of it are read once now, while it is still
+// here, and used from memory as data URLs (an <img> made later with its plain URL would fail offline).
+const kept = {};
+const noSignal = () => kept[icon("nosignal")] || icon("nosignal");
+if (typeof fetch === "function") for (const q of ["high", "low"]) {
+  const u = icon("nosignal", q);
+  fetch(u).then((r) => (r.ok ? r.text() : null)).then((t) => { if (t) kept[u] = "data:image/svg+xml," + encodeURIComponent(t); }).catch(() => {});
+}
 const K = "#1c1330";
 function track(kind, h) { live.get(kind)?.close(); live.set(kind, h); return h; }
 const untrack = (kind, h) => { if (live.get(kind) === h) live.delete(kind); };
 export function closeAll() { for (const h of [...live.values()]) h.close(); }
 
 // ---------- little pixel pieces ----------
+// Each is a pic() from base.mjs, drawn in both picture looks. The rowboat's art pixel is 5 CSS px and the island
+// scene's (--sp) about 5 too, so Low splits each in two (k = 2) to stay near the shared 3px pixel.
 function rowboat() {
-  const hull = pixels(["####################", "#wwwwwwwwwwwwwwwwww#", ".#bbbbbbbbbbbbbbbb#.", "..################.."], { "#": K, w: "#a8703f", b: "#6b4326" }, 6, 12);
-  const oarA = pixels(["o.....", ".o....", "..o...", "...o..", "....oo"], { o: "#c9a46a" }, 16, 9);
-  const oarB = pixels(["o....", ".o...", ".o...", "..o..", "..ooo"], { o: "#c9a46a" }, 16, 9);
-  const waves = pixels(["..ww....ww....ww....ww....ww....ww....ww..", "wwddwwwwddwwwwddwwwwddwwwwddwwwwddwwwwddww", "dddddddddddddddddddddddddddddddddddddddddd"], { w: "#7a6ad0", d: "#3a2f80" }, -6, 14);
-  return `<svg class="scr-rowboat" viewBox="0 0 32 17" width="160" height="85" shape-rendering="crispEdges" aria-hidden="true">
-    <g class="scr-bob">${miniBean(BEAN_COLORS[1], { x: 10, y: 5 })}${hull}<g class="scr-oar-a">${oarA}</g><g class="scr-oar-b">${oarB}</g></g>
-    <g class="scr-waves">${waves}</g></svg>`;
+  const rower = pic().bean(BEAN_COLORS[1], { x: 10, y: 5 });
+  const hull = pic().put(["####################", "#wwwwwwwwwwwwwwwwww#", ".#bbbbbbbbbbbbbbbb#.", "..################.."], { "#": K, w: "#a8703f", b: "#6b4326" }, 6, 12);
+  const oarA = pic().put(["o.....", ".o....", "..o...", "...o..", "....oo"], { o: "#c9a46a" }, 16, 9);
+  const oarB = pic().put(["o....", ".o...", ".o...", "..o..", "..ooo"], { o: "#c9a46a" }, 16, 9);
+  const waves = pic().put(["..ww....ww....ww....ww....ww....ww....ww..", "wwddwwwwddwwwwddwwwwddwwwwddwwwwddwwwwddww", "dddddddddddddddddddddddddddddddddddddddddd"], { w: "#7a6ad0", d: "#3a2f80" }, -6, 14);
+  return `<svg class="scr-rowboat" viewBox="0 0 32 17" width="160" height="85" aria-hidden="true">
+    <g class="scr-bob">${rower.art(2)}${hull.art(2)}<g class="scr-oar-a">${oarA.art(2)}</g><g class="scr-oar-b">${oarB.art(2)}</g></g>
+    <g class="scr-waves">${waves.art(2)}</g></svg>`;
 }
 
+const SCENE_K = 1.5;   // Low: art pixels per island-scene pixel, so they come out the size of scenes/low/dock.svg's (480 x 270)
 const GLYPH = { F: ["###", "#..", "##.", "#..", "#.."], U: ["#.#", "#.#", "#.#", "#.#", "###"], L: ["#..", "#..", "#..", "#..", "###"] };
 function sign(word = "FULL") {
-  let x = 6, letters = "";
-  for (const ch of word) { letters += pixels(GLYPH[ch], { "#": "#e8384f" }, x, 9); x += 4; }
-  return `<svg class="scr-full-sign" viewBox="0 0 24 34" shape-rendering="crispEdges" aria-hidden="true">
-    <rect x="2" y="0" width="4" height="34" fill="${K}"/><rect x="3" y="1" width="2" height="33" fill="#8a5a34"/><rect x="3" y="1" width="1" height="33" fill="#a8703f"/>
-    <rect x="2" y="1" width="21" height="3" fill="${K}"/><rect x="3" y="2" width="19" height="1" fill="#a8703f"/>
-    <g class="scr-swing"><rect x="8" y="4" width="1" height="3" fill="#c9a46a"/><rect x="18" y="4" width="1" height="3" fill="#c9a46a"/>
-      <rect x="4" y="7" width="19" height="10" fill="${K}"/><rect x="5" y="8" width="17" height="8" fill="#fff1cf"/><rect x="5" y="15" width="17" height="1" fill="#e6d3a8"/>${letters}</g></svg>`;
+  const post = pic().box(2, 0, 4, 34, K).box(3, 1, 2, 33, "#8a5a34").box(3, 1, 1, 33, "#a8703f").box(2, 1, 21, 3, K).box(3, 2, 19, 1, "#a8703f");
+  const board = pic().box(8, 4, 1, 3, "#c9a46a").box(18, 4, 1, 3, "#c9a46a").box(4, 7, 19, 10, K).box(5, 8, 17, 8, "#fff1cf").box(5, 15, 17, 1, "#e6d3a8");
+  let x = 6;
+  for (const ch of word) { board.put(GLYPH[ch], { "#": "#e8384f" }, x, 9); x += 4; }
+  return `<svg class="scr-full-sign" viewBox="0 0 24 34" aria-hidden="true">${post.art(SCENE_K)}<g class="scr-swing">${board.art(SCENE_K)}</g></svg>`;
 }
 
 // The ferry, crammed with beans: on the deck, on the roof, at every window, one even peeking out of the funnel.
 function ferry() {
-  const r = [], R = (x, y, w, h, c) => r.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/>`);
+  const p = pic(), R = (x, y, w, h, c) => p.box(x, y, w, h, c);
   const C = BEAN_COLORS;
   // the funnel (a bean has squeezed in) and the cabin roof
-  r.push(miniBean(C[2], { x: 32, y: -8 }));
+  p.bean(C[2], { x: 32, y: -8 });
   R(30, -4, 11, 1, K); R(31, -3, 9, 1, "#ffc45a"); R(30, -3, 1, 1, K); R(40, -3, 1, 1, K);
   R(31, -2, 9, 9, K); R(32, -2, 7, 9, "#ffc45a"); R(32, 0, 7, 2, "#3a2756"); R(37, -2, 2, 9, "#c98a2a"); R(37, 0, 2, 2, "#2a1c42");
-  r.push(miniBean(C[4], { x: 14, y: -1 }), miniBean(C[6], { x: 21, y: -1, flip: true }));
+  p.bean(C[4], { x: 14, y: -1 }); p.bean(C[6], { x: 21, y: -1, flip: true });
   R(11, 7, 37, 3, K); R(12, 8, 35, 1, "#3a2756");
   // cabin with three windows, a face in each
   R(13, 10, 33, 9, K); R(14, 10, 31, 9, "#fff1cf"); R(42, 10, 3, 9, "#e6d3a8");
@@ -52,7 +58,7 @@ function ferry() {
     R(wx + 2, 13, 3, 1, c); R(wx + 1, 14, 5, 2, c); R(wx + 2, 14, 1, 1, K); R(wx + 4, 14, 1, 1, K);
   });
   // beans on the bow and the stern, a flag
-  r.push(miniBean(C[7], { x: 1, y: 11 }), miniBean(C[1], { x: 6, y: 11 }), miniBean(C[3], { x: 46, y: 11, flip: true }), miniBean(C[0], { x: 51, y: 11, flip: true }));
+  p.bean(C[7], { x: 1, y: 11 }); p.bean(C[1], { x: 6, y: 11 }); p.bean(C[3], { x: 46, y: 11, flip: true }); p.bean(C[0], { x: 51, y: 11, flip: true });
   R(57, 4, 1, 15, K); R(58, 4, 4, 3, "#ff6b9a"); R(58, 7, 2, 1, "#ff6b9a");
   // the hull
   const rows = { 20: "#ff8aa3", 21: "#e05a75", 22: "#fff1cf", 23: "#e05a75", 24: "#c8445f", 25: "#c8445f", 26: "#8a2a45", 27: "#8a2a45", 28: "#8a2a45" };
@@ -63,18 +69,18 @@ function ferry() {
     R(x0 - 1, y, 1, 1, K); R(x0 + w, y, 1, 1, K); R(x0, y, w, 1, rows[y]);
   }
   R(7, 22, 3, 3, "#fff1cf"); R(8, 23, 1, 1, "#c8445f"); R(7, 22, 1, 1, "#ff6b9a"); R(9, 24, 1, 1, "#ff6b9a");   // life ring
-  const waves = pixels(["..ww......ww......ww......ww......ww......ww......ww......ww..", "wwddww..wwddww..wwddww..wwddww..wwddww..wwddww..wwddww..wwddww", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"],
+  const waves = pic().put(["..ww......ww......ww......ww......ww......ww......ww......ww..", "wwddww..wwddww..wwddww..wwddww..wwddww..wwddww..wwddww..wwddww", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"],
     { w: "#7a4a9a", d: "#432470" }, -2, 29);
-  return `<svg class="scr-full-ferry" viewBox="0 -9 62 41" shape-rendering="crispEdges" aria-hidden="true"><g class="scr-bob">${r.join("")}</g><g class="scr-waves">${waves}</g></svg>`;
+  return `<svg class="scr-full-ferry" viewBox="0 -9 62 41" aria-hidden="true"><g class="scr-bob">${p.art(SCENE_K)}</g><g class="scr-waves">${waves.art(SCENE_K)}</g></svg>`;
 }
 
 function queue(n = 5) {
   let g = "";
   for (let i = 0; i < n; i++) {
-    g += `<g class="scr-q" style="--i:${i}">${miniBean(BEAN_COLORS[(i * 3 + 2) % 8], { x: i * 8 })}</g>`;
-    if (i === n - 1 || i === 1) g += pixels([".##.", "#cc#", "#cc#"], { "#": K, c: "#a8703f" }, i * 8 + 6, 5);   // suitcases
+    g += `<g class="scr-q" style="--i:${i}">${pic().bean(BEAN_COLORS[(i * 3 + 2) % 8], { x: i * 8 }).art(SCENE_K)}</g>`;
+    if (i === n - 1 || i === 1) g += pic().put([".##.", "#cc#", "#cc#"], { "#": K, c: "#a8703f" }, i * 8 + 6, 5).art(SCENE_K);   // suitcases
   }
-  return `<svg class="scr-full-queue" viewBox="0 0 ${n * 8 + 3} 8" shape-rendering="crispEdges" aria-hidden="true">${g}</svg>`;
+  return `<svg class="scr-full-queue" viewBox="0 0 ${n * 8 + 3} 8" aria-hidden="true">${g}</svg>`;
 }
 
 // ---------- the screens ----------
@@ -107,7 +113,7 @@ export function reconnecting({ seconds = 5, attempt = 1, maxSeconds = 30, delays
   const tid = nextId("ov");
   const L = layer({ cls: "scr-ov scr-reconnect", labelledby: tid, role: "alertdialog", settings });
   L.el.innerHTML = `<div class="scr-rc-band">
-      <img class="scr-rc-ic" src="${noSignal}" alt="">
+      <img class="scr-rc-ic" src="${noSignal()}" alt="">
       <div class="scr-rc-text"><b id="${tid}">Connection interrupted</b><span data-status aria-live="polite"></span></div>
       <div class="scr-rc-act"><button class="scr-btn small" data-retry>Retry now</button>${onLeave ? `<button class="scr-btn small dark" data-leave>Leave</button>` : ""}</div>
     </div>`;
@@ -197,7 +203,7 @@ export function maintenance({ until = null, message = "We are giving the island 
 // offline({ settings }) -> { close(), done: Promise<"online" | "closed"> }  Closes by itself when the connection returns.
 export function offline({ settings } = {}) {
   const L = card({ cls: "scr-offline", settings,
-    art: `<img class="scr-ov-icon" src="${noSignal}" alt="">`, eyebrow: "No connection", title: "You are offline",
+    art: `<img class="scr-ov-icon" src="${noSignal()}" alt="">`, eyebrow: "No connection", title: "You are offline",
     text: `<p class="scr-lede">Check your Wi-Fi or mobile data. We will pick up where you left off as soon as you are back.</p><p class="scr-ov-note" role="status"></p>`,
     actions: `<button class="scr-btn" data-v="retry">Try again</button>` });
   let settle;

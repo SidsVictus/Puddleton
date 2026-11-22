@@ -53,8 +53,6 @@
 </main>
 
 <script type="module">
-import * as boot from "./boot.mjs";
-import * as title from "./title.mjs";
 import { confirm } from "./confirm.mjs";
 import * as agegate from "./agegate.mjs";
 import { showLoading } from "./loading.mjs";
@@ -126,8 +124,6 @@ const roomOn = { refresh: () => wait(800, [...ROOMS].reverse()), join: (r, pass)
 
 // name -> [group, label, run]
 const S = {
-  "boot": ["Boot sting", "Play the sting", () => boot.play()],
-  "title": ["Title", "Title screen", () => title.show({ version: "v0.9.2" })],
   "agegate": ["Age gate", "First visit (reset first)", () => { agegate.resetForTesting(); return agegate.show(); }],
   "agegate-stored": ["Age gate", "Already answered (resolves at once)", () => agegate.show()],
   "loading-tasks": ["Loading", "Five tasks, real progress", () => showLoading([

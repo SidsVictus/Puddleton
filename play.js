@@ -1,17 +1,17 @@
 // Puddleton, the game client. The game server (server/PROTOCOL.md) runs every room; this page is a view of what it
 // sends and a remote for what the player does. Networking lives in net.mjs, the ready-made screens in screens/.
 import { phaseDuration, MAFIA_TEAM } from "./engine/engine.mjs";
-import { createWorld, town, addBean, portrait, createMirror, BEAN_COLORS, setQuality } from "./world.mjs";
+import { createWorld, town, addBean, portrait, createMirror, BEAN_COLORS } from "./world.mjs";
+import { applyQuality, quality, onQuality } from "./quality.mjs";
 import { RACKS, SHOP, EMOTES, DEFAULT_LOOK, cleanLook, killMethod, preview } from "./cosmetics.mjs";
 import { createStage } from "./stage.mjs";
 import { initSound, click, sfx } from "./audio.mjs";
 import { PROTOCOL } from "./config.mjs";
 import { PHRASES, PHRASE_BY_ID } from "./phrases.mjs";
 import { call, guest, ensureGuest, turnstileToken, device, RoomLink, FINAL, ApiError, NetError, STORAGE_KEYS } from "./net.mjs";
-import { sting } from "./start.mjs";
-import { layer, calm as calmScreens, nextId } from "./screens/base.mjs";
+import { begin, started } from "./start.mjs";
+import { layer, calm as calmScreens, nextId, uiIcon, icon } from "./screens/base.mjs";
 import * as agegate from "./screens/agegate.mjs";
-import * as titleScreen from "./screens/title.mjs";
 import { showLoading } from "./screens/loading.mjs";
 import * as settingsMenu from "./screens/settings.mjs";
 import { getSettings, setSetting, onChange } from "./screens/prefs.mjs";
@@ -23,16 +23,17 @@ import * as reports from "./screens/report.mjs";
 import * as sanction from "./screens/sanction.mjs";
 import * as roomlist from "./screens/roomlist.mjs";
 import { confirm } from "./screens/confirm.mjs";
+import { watchBattery } from "./screens/battery.mjs";
 
 const VERSION = "1.0.0";
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// Pixel icons are small SVG files in ui/ (drawn by tools/ui.py); names without a file render nothing.
+// Icons are small SVG files in ui/ (drawn by tools/ui.py, uiIcon picks the set for the picture quality); names without a file render nothing.
 const ICONS = new Set(["back", "hanger", "help", "share", "door", "crown", "moon", "sun", "check", "skull", "clock", "book", "hourglass", "close"]);
-const ic = (name, cls = "") => (ICONS.has(name) ? `<img class="ic ${cls}" alt="" src="ui/${name}.svg">` : "");
-const MORE = `<svg viewBox="0 0 12 12" width="20" height="20" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="5" width="2" height="2" fill="currentColor"/><rect x="5" y="5" width="2" height="2" fill="currentColor"/><rect x="9" y="5" width="2" height="2" fill="currentColor"/></svg>`;
+const ic = (name, cls = "", sm = cls !== "huge") => (ICONS.has(name) ? `<img class="ic ${cls}" alt="" src="${uiIcon(name, null, sm)}"${sm ? " data-sm" : ""}>` : "");   // sm: drawn at 16px or less
+const MORE = `<svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden="true"><path class="art-lo" shape-rendering="crispEdges" d="M2 8h4v4h-4zM8 8h4v4h-4zM14 8h4v4h-4z"/><path class="art-hi" d="M6 10a2 2 0 1 1-4 0a2 2 0 1 1 4 0M12 10a2 2 0 1 1-4 0a2 2 0 1 1 4 0M18 10a2 2 0 1 1-4 0a2 2 0 1 1 4 0"/></svg>`;   // square dots in Low, round in High
 
 const ROLE = {
   villager: { name: "Villager", icon: "sprout", blurb: "No powers, just a big heart and a sharp vote. Sniff out the Mafia by day." },
@@ -141,10 +142,13 @@ function setScene(name) {
   box.dataset.name = name || "";
   if (!name) { box.innerHTML = ""; return; }
   const l = document.createElement("i");
-  l.style.backgroundImage = `url(scenes/${name}.svg)`;
+  l.style.backgroundImage = sceneUrl(name);
   box.append(l);
   setTimeout(() => { while (box.children.length > 1) box.firstElementChild.remove(); }, 800);
 }
+// Each scene comes in both looks (tools/scenes.py): smooth in scenes/, chunky pixels in scenes/low/. A change swaps it in place.
+const sceneUrl = (name) => `url(scenes/${quality() === "low" ? "low/" : ""}${name}.svg)`;
+onQuality(() => { const box = $("#scene"); if (box.dataset.name) for (const l of box.children) l.style.backgroundImage = sceneUrl(box.dataset.name); });
 function show(id) {
   const moved = app.screen !== id, prev = $(".screen.active");
   app.screen = id;
@@ -205,7 +209,7 @@ function syncBlocks() {
 }
 function applyDisplay(s = getSettings()) {
   app.calm = calmScreens(s);
-  setQuality(s.display.quality);
+  applyQuality(s.display.quality);
   const p = { shake: s.display.screenShake, flash: s.display.flashing, calm: app.calm };
   stage?.setPrefs(p); wstage?.setPrefs(p);
 }
@@ -636,7 +640,7 @@ function phaseCard(base, v) {
   if (v && phase === "day" && v.savedFrom?.night === day) lines.push(`<p class="good">You were attacked last night, and an Angel saved you.</p>`);
   if (v && fresh.some((ev) => ev.player === v.you)) lines.push(`<p class="bad">${v.deathBy?.killer ? `That was you. ${esc(v.deathBy.killer)} got you.` : "That was you."} You are out, but you can keep watching.</p>`);
   else if (v && v.alive) lines.push(`<p class="do">${trial ? (v.accused === v.you ? "You are on trial. Say your last words in the Square." : "Listen to the last words.") : night ? (ROLE[v.role].act ? "You have a move to make tonight." : "You sleep tonight.") : "Talk it over, then vote."}</p>`);
-  $("#phaseCardIcon").src = `ui/${night ? "moon" : "sun"}.svg`;
+  $("#phaseCardIcon").src = uiIcon(night ? "moon" : "sun");
   $("#phaseCardTitle").textContent = trial ? `The trial of ${base.accused}` : night ? `Night ${day} falls` : `Day ${day} dawns`;
   $("#phaseCardText").innerHTML = lines.join("");
   const card = $("#phaseCard"), hold = fresh.length ? 4600 : 2600;
@@ -680,7 +684,7 @@ function renderGame() {
   }
   setScene(phase === "ended" ? "finale" : phase === "night" ? (day % 2 ? "rooftops" : "woods") : (day % 2 ? "square" : "market"));
   $("#phaseLabel").textContent = phase === "ended" ? "The end" : phase === "night" ? `Night ${day}` : phase === "trial" ? "The trial" : `Day ${day}`;
-  $("#phaseIcon").src = `ui/${phase === "night" ? "moon" : "sun"}.svg`;
+  $("#phaseIcon").src = uiIcon(phase === "night" ? "moon" : "sun");
   $("#modeBadge").textContent = MODE[app.mode].name;
   const dealt = app.meta.dealt, host = amHost();
   $("#dealBtn").hidden = !(g && !dealt);
@@ -960,7 +964,7 @@ function replayAct(a, mode) {
 function setPrompt(frame, title, text, extra = "") {
   const box = $("#actionPrompt");
   box.className = `prompt plate ${frame}`;
-  box.innerHTML = `${frame === "teal" ? ic("check") : ""}<div><b>${title}</b><span>${text}</span></div>${extra}`;
+  box.innerHTML = `${frame === "teal" ? ic("check", "", false) : ""}<div><b>${title}</b><span>${text}</span></div>${extra}`;
 }
 
 // ---------- talk: the square, whispers, ghosts; typing or phrases ----------
@@ -1074,7 +1078,7 @@ function playerMenu(id) {
   if (!inGame && host) items.push(["kick", "Remove from the room", "door"]);
   else if (!inGame && !app.you?.gm) items.push(["votekick", `Vote to remove${app.lobby?.votekicks?.[id] ? ` (${app.lobby.votekicks[id]} of ${app.lobby.kickNeed})` : ""}`, "door"]);
   if (inGame && host && seat && !seat.online && alive && (app.view || app.gm).phase !== "ended") items.push(["remove", "Remove from the game (offline)", "door"]);
-  const art = (n) => (n === "door" ? "ui/door.svg" : `screens/icons/${n}.svg`);
+  const art = (n) => (n === "door" ? uiIcon("door") : icon(n));
   const tid = nextId("pm");
   menuOpen = true;
   const L = layer({ cls: "scr-confirm scr-veil pad-pm", labelledby: tid, settings: getSettings(), escape: () => done() });
@@ -1169,7 +1173,8 @@ function switchTab(name) {
 }
 
 // ---------- manual: story walkthrough on first launch, full book in Help ----------
-function openWalkthrough() {
+// first: the automatic first-visit run; when it closes, a "New here?" bubble points at How to play.
+function openWalkthrough(first = false) {
   const dlg = $("#manual"), pages = $$("#manualPages .page");
   let i = 0;
   const draw = () => {
@@ -1184,7 +1189,16 @@ function openWalkthrough() {
     if (+step > 0 && i === pages.length - 1) { dlg.close(); try { localStorage.setItem("pad-manual-seen", "1"); } catch { /* blocked */ } return; }
     i = Math.max(0, i + +step); draw();
   };
+  if (first) dlg.addEventListener("close", newHere, { once: true });
   draw(); dlg.showModal();
+}
+// The How to play tile glows and a speech bubble over it says "New here?", until the player taps it.
+function newHere() {
+  const tile = $("#home [data-open-help]");
+  if (!tile || tile.classList.contains("glow")) return;
+  tile.classList.add("glow");
+  tile.insertAdjacentHTML("beforeend", `<span class="newhere" aria-hidden="true">New here?</span>`);
+  tile.addEventListener("click", () => { tile.classList.remove("glow"); tile.querySelector(".newhere")?.remove(); }, { once: true });
 }
 
 // ---------- names ----------
@@ -1228,7 +1242,7 @@ function renderWardrobe() {
   $("#rackList").innerHTML = SHOP[app.rack].map((item) => {
     const locked = item.locked && !mine.has(item.id);
     return `<li><button class="swatch${locked ? " locked" : ""}" data-item="${item.id}" aria-pressed="${(app.rack === "emote" ? app.emotePick : app.trying[app.rack]) === item.id}">
-      <img class="bean" alt="" width="84" height="84" src="${thumb(app.rack, item.id)}">${item.name}${locked ? '<img class="lock" alt="Locked" src="lock.svg">' : ""}</button></li>`;
+      <img class="bean" alt="" width="84" height="84" src="${thumb(app.rack, item.id)}">${item.name}${locked ? `<img class="lock" alt="Locked" src="${uiIcon("lock")}">` : ""}</button></li>`;
   }).join("");
   updatePreview();
   const item = SHOP[app.rack].find((i) => i.id === (app.rack === "emote" ? app.emotePick : app.trying[app.rack])) || SHOP[app.rack][0];
@@ -1370,7 +1384,7 @@ function askName() {
   return new Promise((resolve) => {
     const tid = nextId("nm");
     const L = layer({ cls: "scr-confirm scr-veil", labelledby: tid, settings: getSettings(), escape: () => end(null) });
-    L.el.innerHTML = `<form class="scr-dialog scr-plate" novalidate><img class="scr-art" src="screens/icons/people.svg" alt="">
+    L.el.innerHTML = `<form class="scr-dialog scr-plate" novalidate><img class="scr-art" src="${icon("people")}" alt="">
         <h2 class="scr-title" id="${tid}">Who is asking?</h2>
         <p class="scr-lede">Type the name your friend knows you by, so they can tell the request is from you.</p>
         <label class="scr-field"><span class="scr-label">Your name</span><input class="scr-input" name="n" maxlength="16" autocomplete="nickname" spellcheck="false" value="${esc($("#nameInput").value.trim())}"></label>
@@ -1390,7 +1404,7 @@ function askName() {
   });
 }
 // A short message with one OK button.
-function notice({ title, text, art = "screens/icons/people.svg" }) {
+function notice({ title, text, art = icon("people") }) {
   return new Promise((resolve) => {
     const tid = nextId("nt");
     const L = layer({ cls: "scr-confirm scr-veil", labelledby: tid, role: "alertdialog", settings: getSettings(), escape: () => end() });
@@ -1541,10 +1555,11 @@ $("#codeInput").value = inviteCode;
 $("#heroBeans").innerHTML = ["mafia", "angel", "detective", "jester", "godfather"].map((r, i) => `<img class="bean" alt="" width="88" height="88" src="${portrait(r, BEAN_COLORS[i])}">`).join("");
 $$("[data-role]").forEach((el, i) => el.insertAdjacentHTML("afterbegin", `<img class="bean" alt="" width="44" height="44" src="${portrait(el.dataset.role, BEAN_COLORS[i % 8])}">`));
 setInterval(renderTimer, 500);
-// Icons the connection screens need when the network is already gone: fetch them now, while it is still here.
-const keepIcons = ["screens/icons/refresh.svg", "ui/close.svg", "ui/help.svg", "ui/door.svg"].map((src) => Object.assign(new Image(), { src }));
+// Icons the connection screens need when the network is already gone: fetch them now (both looks), while it is still here.
+const keepIcons = ["high", "low"].flatMap((q) => [icon("refresh", q), uiIcon("close", q), uiIcon("help", q), uiIcon("door", q)]).map((src) => Object.assign(new Image(), { src }));
 initSound($("#soundBtn"));
 applyDisplay();
+watchBattery();
 // Keep the screen awake during a game, and pick the game back up when the player returns to the tab.
 const wake = () => { if ("wakeLock" in navigator && document.visibilityState === "visible") navigator.wakeLock.request("screen").catch(() => {}); };
 document.addEventListener("click", wake, { once: true });
@@ -1564,19 +1579,19 @@ addEventListener("offline", () => { if (!offlineCard) { offlineCard = overlays.o
 addEventListener("online", () => { offlineCard?.close(); app.reconnect?.retry(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-// ---------- start up: sting, age gate (first visit), title, loading with tips, then home ----------
+// ---------- start up: one start screen (the age question over it on a first visit), then home ----------
+// Sound needs no title screen: audio.mjs starts it on the first tap or key anywhere.
 (async function startup() {
-  await sting;
-  app.band = await agegate.show({ settings: getSettings() });
-  applyBandUI();
-  await titleScreen.show({ version: `v${VERSION}`, settings: getSettings() });
-  for (let i = 0; i < 20 && document.querySelector(".scr-titlescreen"); i++) await sleep(50);   // let the title finish leaving first
-  const tasks = [
+  begin([
     { label: "Checking the ferry timetable", run: () => call("GET", "/version", null, { auth: false }).then((v) => { if (v?.protocol !== PROTOCOL) app.updateNeeded = true; }, () => {}) },
-    { label: "Getting your guest pass", weight: 2, run: () => ensureGuest(app.band).then(onGuest, (e) => { app.guestError = e; }) },
+    { label: "Getting your guest pass", weight: 2, run: async () => {
+      app.band = await agegate.show({ settings: getSettings(), over: true });   // first visit only; at once after that
+      applyBandUI();
+      await ensureGuest(app.band).then(onGuest, (e) => { app.guestError = e; });
+    } },
     { label: "Waking the beans", run: () => Promise.race([Promise.all([document.fonts?.ready, sleep(300)]), sleep(4000)]) },
-  ];
-  try { await showLoading(tasks, { label: "Loading", settings: getSettings() }); } catch (e) { console.error(e); }
+  ]);
+  try { await started; } catch (e) { console.error(e); }
   document.body.classList.remove("booting");
   show("home");
   if (app.updateNeeded) overlays.updateAvailable({ settings: getSettings() });
@@ -1585,7 +1600,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
   if (app.muteNotice) { const m = app.muteNotice; app.muteNotice = null; await sanction.show({ kind: "muted", reason: sanctionReason(m.reason), until: m.until ? new Date(m.until) : null, playerName: app.name, appealEmail: m.appeal, settings: getSettings() }); }
   let seen = false;
   try { seen = !!localStorage.getItem("pad-manual-seen"); } catch { /* blocked */ }
-  if (!seen) openWalkthrough();
+  if (!seen) openWalkthrough(true);
   redeemFriendLink();
   if (inviteCode) { $("#homeMsg").textContent = `Invited to room ${inviteCode}. Pick a name and tap Join.`; ($("#nameInput").value ? $("#joinBtn") : $("#nameInput")).focus(); }
 })();

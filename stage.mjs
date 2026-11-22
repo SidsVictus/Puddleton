@@ -1,9 +1,11 @@
 // The live stage: a close-up toy town where the beans live, walk, chat, and where every night action plays out
-// as a short cutscene. Rendered at the screen's own resolution (see sharpness() in world.mjs).
+// as a short cutscene. Rendered smooth at the screen's own resolution, or in square pixels in the Low picture quality
+// (see sharpness() in world.mjs).
 // See STAGE.md for the API.
 import * as THREE from "three";
 import { makeBean, portrait, sharpness } from "./world.mjs";
-import { kit, animate, cleanLook, DEFAULT_LOOK, bodyColors, buildHouse, buildProp, buildTomb, iconCanvas, HEADS, PACKS, BODIES, HOUSES, wearsHat } from "./cosmetics.mjs";
+import { kit, animate, cleanLook, DEFAULT_LOOK, bodyColors, buildHouse, buildProp, buildTomb, iconCanvas, smoothIcon, pixelPass, HEADS, PACKS, BODIES, HOUSES, wearsHat } from "./cosmetics.mjs";
+import { quality, onQuality } from "./quality.mjs";
 
 const { toon, flat, mesh, box, cyl, cone, ball, dome, turn, squash } = kit;
 const PI = Math.PI, TAU = PI * 2;
@@ -74,6 +76,7 @@ const CSS = `
 .stg-paper{position:absolute;left:7%;right:7%;top:8%;bottom:6%;background:#fffaf0;border:3px solid #1c1330}
 .stg-paper h4{margin:6% 0 0;text-align:center;font-size:30px;font-weight:400;color:#1c1330;letter-spacing:2px}
 .stg-photo{display:block;width:46%;margin:3% auto 0;aspect-ratio:1;background:#cfe3ff;border:3px solid #1c1330;image-rendering:auto;object-fit:cover}
+html[data-quality="low"] .stg-photo{image-rendering:pixelated}
 .stg-line{height:3px;margin:6% 12% 0;background:#c9bfae}
 .stg-line.s{margin-right:40%}
 .stg-clip{position:absolute;left:50%;top:3%;width:22%;height:7%;margin-left:-11%;background:#a8b0c0;border:3px solid #1c1330}
@@ -114,11 +117,20 @@ function trash(o) {
   o.parent?.remove(o);
   o.traverse((m) => { if (m.geometry && !m.geometry.userData.shared) m.geometry.dispose(); if (m.material?.userData.own) { m.material.map?.dispose(); m.material.dispose(); } });
 }
-// A tiny tiling pixel texture, drawn at runtime.
+// A tiny tiling pixel texture, drawn at runtime. Low keeps its texels square; High smooths them (mipmapped, so far
+// ground does not shimmer). Live ones follow a change of picture quality.
+const pixelTexs = new Set();
+onQuality(() => pixelTexs.forEach(texels));
+function texels(t) {
+  const low = quality() === "low";
+  t.magFilter = low ? THREE.NearestFilter : THREE.LinearFilter; t.minFilter = low ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = !low; t.needsUpdate = true;
+}
 function pixelTexture(size, paint, repeat) {
   const c = document.createElement("canvas"); c.width = c.height = size; paint(c.getContext("2d"), size);
-  const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; texels(t);
   if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat); }
+  pixelTexs.add(t); t.addEventListener("dispose", () => pixelTexs.delete(t));
   return t;
 }
 const speckle = (base, dots) => (x, n) => {
@@ -129,22 +141,6 @@ const cobble = (x, n) => {
   x.fillStyle = "#b7a98f"; x.fillRect(0, 0, n, n);
   for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { x.fillStyle = ["#d8cdb4", "#cfc3a8", "#e2d8c2", "#c9bc9e"][(r * 3 + c * 5) % 4]; x.fillRect(c * 8 + (r % 2 ? 4 : 0) + 1, r * 8 + 1, 6, 6); if (r % 2 && c === 3) x.fillRect(1 - 4, r * 8 + 1, 6, 6); }
 };
-// A 10 x 10 pixel icon grown to 80 x 80 by three rounds of Scale2x: same shape and colours, but the stair-stepped
-// diagonals become clean slopes, so the icon can be drawn smooth at any size.
-function smoothIcon(src) {
-  let n = src.width, px = new Uint32Array(src.getContext("2d").getImageData(0, 0, n, n).data.buffer);
-  for (let k = 0; k < 3; k++, n *= 2) {
-    const out = new Uint32Array(n * n * 4), at = (x, y) => px[clamp(y, 0, n - 1) * n + clamp(x, 0, n - 1)];
-    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-      const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1), o = 4 * y * n + 2 * x;
-      out[o] = C === A && C !== D && A !== B ? A : P; out[o + 1] = A === B && A !== C && B !== D ? B : P;
-      out[o + 2 * n] = D === C && D !== B && C !== A ? C : P; out[o + 2 * n + 1] = B === D && B !== A && D !== C ? D : P;
-    }
-    px = out;
-  }
-  const c = document.createElement("canvas"); c.width = c.height = n; c.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(px.buffer), n, n), 0, 0);
-  return c;
-}
 const shadowMat = new THREE.MeshBasicMaterial({ color: "#0b0818" });
 const sootMat = new THREE.MeshBasicMaterial({ color: "#2a2438" });
 const boneMat = new THREE.MeshBasicMaterial({ color: "#ffffff" });
@@ -160,21 +156,21 @@ const col = (c) => (colorCache[c] ||= new THREE.Color(c));
 
 export function createStage(canvas, options = {}) {
   const opt = { wander: true, onTap: null, ...options };
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }), sharp = sharpness();
-  canvas.style.imageRendering = "auto"; canvas.style.touchAction = "none";
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }), sharp = sharpness(), pass = pixelPass(renderer);
+  canvas.style.touchAction = "none";
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, 1, 0.3, 900);
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
   let W = 1, H = 1, tanV = 0.34, tanH = 0.34, disposed = false;
 
   // ---------- sky, light, weather ----------
-  const u = { top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, low: { value: new THREE.Color() } };
+  const u = { top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, low: { value: new THREE.Color() }, dither: { value: 0 } };
   const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 16, 12), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false, uniforms: u,
     vertexShader: "varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; varying float h;
+    fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform float dither; varying float h;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2.0 + a.y * a.y * 0.75); }
-      void main(){ float t = clamp(h * 1.6 + 0.42, 0.0, 1.0);
-        float q = clamp(floor(t * 9.0 + b2(0.5 * gl_FragCoord.xy) * 0.25 + b2(gl_FragCoord.xy)) / 9.0, 0.0, 1.0);
+      void main(){ float q = clamp(h * 1.6 + 0.42, 0.0, 1.0);   // High: a smooth blend. Low: 9 bands with an ordered dither between them
+        if (dither > 0.5) q = clamp(floor(q * 9.0 + b2(0.5 * gl_FragCoord.xy) * 0.25 + b2(gl_FragCoord.xy)) / 9.0, 0.0, 1.0);
         gl_FragColor = vec4(q < 0.5 ? mix(low, mid, q * 2.0) : mix(mid, top, q * 2.0 - 1.0), 1.0);
         #include <colorspace_fragment>
       }`,
@@ -267,7 +263,9 @@ export function createStage(canvas, options = {}) {
     m.position.set(x, y, z); m.material.color.set(color); m.visible = true; Object.assign(m.userData, { t: 0, dur, r0, r1, up: upright });
     if (!upright) m.rotation.set(-PI / 2, 0, 0);
   }
-  const iconTex = {}, iconMap = (n) => (iconTex[n] ||= Object.assign(new THREE.CanvasTexture(smoothIcon(iconCanvas(n))), { colorSpace: THREE.SRGBColorSpace }));
+  const iconTex = {}, iconMap = (n) => (iconTex[(sharp.low ? "low-" : "") + n] ||= sharp.low   // Low: the icon's own 10 x 10 pixels, kept square
+    ? Object.assign(new THREE.CanvasTexture(iconCanvas(n)), { colorSpace: THREE.SRGBColorSpace, magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter, generateMipmaps: false })
+    : Object.assign(new THREE.CanvasTexture(smoothIcon(n)), { colorSpace: THREE.SRGBColorSpace }));
   const icons = Array.from({ length: 20 }, () => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false })); s.visible = false; s.renderOrder = 9; s.userData = { t: 0, ttl: 0, s: 1, vx: 0, vy: 0, vz: 0, sway: 0 }; scene.add(s); return s; });
   let iconHead = 0;
   // A floating pixel icon (heart, zed, bang, quest, anger, drop, note, star, skull, ha, hand, swirl, arrow).
@@ -363,7 +361,13 @@ export function createStage(canvas, options = {}) {
     return tween(dur, (k) => { camPos.set(ax + (px - ax) * k, ay + (py2 - ay) * k, az + (pz - az) * k); camLook.set(bx + (lx - bx) * k, by + (ly - by) * k, bz + (lz - bz) * k); }, ease);
   }
   // The drawing buffer: W x H CSS pixels at the current sharpness. Particles are sized in world units, so their scale follows it.
-  function sizeBuffer() { renderer.setPixelRatio(sharp.ratio); renderer.setSize(W, H, false); pMat.uniforms.scale.value = canvas.height / (2 * tanV); }
+  // Low draws square pixels, but the hideout map keeps one render pixel per CSS pixel so the names on it stay readable.
+  function sizeBuffer() {
+    canvas.style.imageRendering = sharp.low ? "pixelated" : "auto";
+    for (const m of starMats) m.size = sharp.low ? 3 : 2;   // sizes are scaled by the pixel ratio: one square pixel in Low
+    u.dither.value = sharp.low ? 1 : 0;
+    renderer.setPixelRatio(sharp.low && hide ? 1 : sharp.ratio); renderer.setSize(W, H, false); pMat.uniforms.scale.value = canvas.height / (2 * tanV);
+  }
   function fit() {
     const cw = canvas.clientWidth || 1, ch = canvas.clientHeight || 1;
     W = cw; H = ch;
@@ -1364,10 +1368,12 @@ export function createStage(canvas, options = {}) {
       crew.forEach((M, i) => { const a = extra(M.role || "mafia", M.look); hscene.add(a.g); a.g.position.set((i - (crew.length - 1) / 2) * 1.25, -1.2, 0.9); a.face = PI + (i - (crew.length - 1) / 2) * -0.15; snap(a); });
       hscene.add(points);
       const state = hide = { g, members, darts: new Map(), onPick, lampG, closed: false, done: null };
+      if (sharp.low) sizeBuffer();
       setFade(0); setHideoutPicks(picks);
       if (pending <= 0) await new Promise((res) => { state.done = res; });
       for (const d of state.darts.values()) trash(d.g);
       hide = null; scene.add(points); trash(g); fadeV = 1; setFade(1);
+      if (sharp.low) sizeBuffer();
     }, false);
     return p;
   }
@@ -1467,7 +1473,7 @@ export function createStage(canvas, options = {}) {
     if (flashA > 0) { flashA = Math.max(0, flashA - flashRate * raw); ui.flash.style.opacity = flashA; }
     if (!cur && fadeV > 0) setFade(Math.max(0, fadeV - raw * 4));
     if (capUntil && now > capUntil) caption("");
-    renderer.render(hide ? hscene : scene, cam);
+    if (sharp.low) pass.render(hide ? hscene : scene, cam); else renderer.render(hide ? hscene : scene, cam);
     stepBubbles();
     cost += (performance.now() - t0 - cost) * 0.05;   // smoothed CPU time of one frame, for stats
   }
@@ -1489,7 +1495,7 @@ export function createStage(canvas, options = {}) {
     for (const m of rings) m.material.dispose(); ringGeo.dispose(); for (const s of icons) s.material.dispose(); for (const k of Object.keys(iconTex)) iconTex[k].dispose();
     for (const c of clouds) c.traverse((m) => m.geometry?.dispose()); for (const s of stars) s.geometry.dispose();
     pGeo.dispose(); pMat.dispose(); sky.geometry.dispose(); sky.material.dispose(); orb.geometry.dispose();
-    renderer.dispose(); root.remove();
+    pass.dispose(); renderer.dispose(); root.remove();
   }
   return {
     setPlayers, setPhase, walkTo, bubble, emote, setGhost, showGhosts, where,

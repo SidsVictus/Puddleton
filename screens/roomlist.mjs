@@ -1,9 +1,8 @@
 // Quick Play: the public rooms to join, Quick join for the best one, and Create a room (public or private with a
 // room pass). Data comes in through open() and update(); actions go out through the on.* callbacks.
 // A callback that returns true finishes the screen; a string is shown to the player as the reason it did not work.
-import { layer, esc, nextId, uiIcon, icon, asset, MODES, radios, bean } from "./base.mjs";
+import { layer, esc, nextId, uiIcon, icon, MODES, radios, bean } from "./base.mjs";
 
-const LOCK = asset("../lock.svg");
 const PASS = /^[A-Za-z0-9]{4,12}$/;
 let current = null;
 
@@ -43,8 +42,8 @@ export function open({ rooms = null, on = {}, settings } = {}) {
       const max = r.max || 16, full = r.players >= max, m = MODES[r.mode] ? r.mode : "classic";
       return `<li class="scr-rl-room${full ? " full" : ""}">
         <span class="scr-rl-mode" data-mode="${m}">${esc(MODES[m].name)}</span>
-        <div class="scr-rl-info"><b>${esc(r.name || "Open room")}${r.private ? `<img class="scr-rl-lock" src="${LOCK}" alt="Private room" title="Private room">` : ""}</b>
-          <small><img src="${uiIcon(r.narrator === "human" ? "book" : "clock")}" alt="">${r.narrator === "human" ? "Grandmaster narrates" : "Town clock narrates"}</small></div>
+        <div class="scr-rl-info"><b>${esc(r.name || "Open room")}${r.private ? `<img class="scr-rl-lock" src="${uiIcon("lock", null, true)}" data-sm alt="Private room" title="Private room">` : ""}</b>
+          <small><img src="${uiIcon(r.narrator === "human" ? "book" : "clock", null, true)}" data-sm alt="">${r.narrator === "human" ? "Grandmaster narrates" : "Town clock narrates"}</small></div>
         <div class="scr-rl-count" aria-label="${r.players} of ${max} players"><span><b>${r.players}</b> / ${max}</span><i aria-hidden="true"><b style="width:${Math.round((r.players / max) * 100)}%"></b></i></div>
         <button class="scr-btn small${r.private ? " dark" : ""}" data-join="${esc(r.id)}" ${full ? "disabled" : ""} aria-label="${full ? "Full" : `Join ${esc(r.name || "room")}`}">${full ? "Full" : "Join"}</button></li>`;
     }).join("");
@@ -99,7 +98,7 @@ export function passDialog(room, on, settings) {
     const tid = nextId("rp");
     const L = layer({ cls: "scr-roompass scr-veil", labelledby: tid, settings, escape: () => end(false) });
     L.el.innerHTML = `<form class="scr-dialog scr-plate scr-rl-form" novalidate>
-        <img class="scr-rl-formart" src="${LOCK}" alt="">
+        <img class="scr-rl-formart" src="${uiIcon("lock")}" alt="">
         <span class="scr-eyebrow">${esc(room.name || "Private room")}</span><h2 class="scr-title small" id="${tid}">This room has a pass</h2>
         <label class="scr-field"><span class="scr-label">Room pass</span><input class="scr-input" name="pass" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
         <p class="scr-rl-err" role="alert"></p>

@@ -78,7 +78,7 @@ export function open({ catalog = [], players = [], roles = ALL_ROLES, title = "Q
     else if (lv.kind === "phrases") { pick = it.entry; args = {}; askNext(); }
     else { args[lv.ask] = it.value; askNext(); }
   };
-  stack.push({ kind: "cats", crumb: "Pick a topic", title, items: cats.map((c) => ({ cat: c, html: `<span>${esc(c)}</span><small>${catalog.filter((e) => e.cat === c).length}</small><img class="scr-pw-chev" src="${icon("chevron")}" alt="">` })) });
+  stack.push({ kind: "cats", crumb: "Pick a topic", title, items: cats.map((c) => ({ cat: c, html: `<span>${esc(c)}</span><small>${catalog.filter((e) => e.cat === c).length}</small><img class="scr-pw-chev" src="${icon("chevron", null, true)}" data-sm alt="">` })) });
 
   list.addEventListener("click", (e) => { const b = e.target.closest("[data-i]"); if (b) choose(+b.dataset.i); });
   list.addEventListener("keydown", (e) => {

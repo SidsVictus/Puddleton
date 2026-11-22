@@ -39,9 +39,10 @@ function keep(band, fresh) {
 
 let open = null;
 
-// show({ settings, allowRetake = false }) -> Promise<"child" | "teen" | "adult">
+// show({ settings, allowRetake = false, over = false }) -> Promise<"child" | "teen" | "adult">
+// over: a see-through veil over the screen below (the start screen) instead of its own night sky.
 // Resolves at once with the stored band when there is one (and repairs any missing copy).
-export function show({ settings, allowRetake = false } = {}) {
+export function show({ settings, allowRetake = false, over = false } = {}) {
   if (open) return open;
   const have = getBand(), lock = lockInfo();
   if (have && !(allowRetake && lock && Date.now() - lock.at >= COOLDOWN_MS)) { keep(have, false); return Promise.resolve(have); }
@@ -49,7 +50,7 @@ export function show({ settings, allowRetake = false } = {}) {
   const tid = nextId("age"), did = nextId("age"), eid = nextId("age");
   const now = new Date(), year = now.getFullYear();
   const months = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat(undefined, { month: "long" }).format(new Date(2000, i, 15)));
-  const L = layer({ cls: "scr-agegate scr-night", labelledby: tid, describedby: did, settings });
+  const L = layer({ cls: `scr-agegate ${over ? "scr-veil over" : "scr-night"}`, labelledby: tid, describedby: did, settings });
   L.el.innerHTML = `<div class="scr-dialog scr-plate gold scr-age">
       <div class="scr-age-beans" aria-hidden="true">${bean("#a5ecb0", { size: 4 })}${bean("#ff9db5", { size: 5 })}${bean("#8fd6ff", { size: 4 })}</div>
       <span class="scr-eyebrow">Welcome to Puddleton</span>

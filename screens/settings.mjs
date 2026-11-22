@@ -35,7 +35,7 @@ function sections(band, o) {
       { type: "switch", path: "audio.muted", label: "Mute everything", hint: "Silences music and effects until you switch it back." },
     ] },
     { id: "display", name: "Display", blurb: "How the game looks and moves.", rows: [
-      { ...SEG("display.quality", [["auto", "Auto"], ["high", "High"], ["low", "Low"]]), label: "Picture quality", hint: "Low helps older phones stay smooth and cool." },
+      { ...SEG("display.quality", [["auto", "Auto"], ["high", "High"], ["low", "Low"]]), label: "Picture quality", hint: "High is smooth. Low is chunky pixels and saves battery. Auto picks for your device." },
       { ...SEG("display.textSize", [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"]]), label: "Text size" },
       { type: "switch", path: "display.reduceMotion", label: "Reduce motion", hint: "Fewer moving parts, gentler screen changes." },
       { type: "switch", path: "display.screenShake", label: "Screen shake" },

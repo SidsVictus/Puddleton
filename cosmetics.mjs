@@ -1,5 +1,6 @@
 // The wardrobe: bean colors, head pieces and backpacks, all modelled in code in the same pixel style as the beans.
 import * as THREE from "three";
+import { quality, onQuality } from "./quality.mjs";
 
 const grad = new THREE.DataTexture(new Uint8Array([80, 160, 255]), 3, 1, THREE.RedFormat);
 grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
@@ -267,6 +268,47 @@ export const RACKS = { body: BODIES, head: HEADS, pack: PACKS, house: HOUSES, ki
 export const SHOP = { ...RACKS, emote: EMOTES };   // everything the shop sells
 export const DEFAULT_LOOK = { body: "bubblegum", head: "none", pack: "none", house: "match", killfx: "usual", tomb: "stone", dance: "hop" };
 export const kit = { toon, flat, mesh, box, cyl, cone, ball, dome, turn, squash, grad };   // shared pixel modelling helpers (used by stage.mjs)
+
+// ---------- picture quality (quality.mjs) ----------
+// The Low look draws a 3D view at one render pixel per 3 CSS pixels with no anti-aliasing, and the page grows it back
+// with square pixels (image-rendering: pixelated). Anti-aliasing is fixed when a WebGL context is made, so pixelPass()
+// draws the scene into a small target without it and then copies that to the canvas pixel for pixel.
+// (Nothing here touches the page or WebGL at load: the server imports this file for its catalogs.)
+export const LOW_RATIO = 1 / 3;
+export function pixelPass(renderer) {
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ blending: THREE.NoBlending, depthTest: false, depthWrite: false }));
+  const solo = new THREE.Scene(), cam2 = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); solo.add(quad);
+  let rt = null;   // an sRGB target, so dark night skies keep smooth bands
+  return {
+    render(scene, cam) {
+      const { width: w, height: h } = renderer.domElement;
+      if (!rt) { rt = new THREE.WebGLRenderTarget(w, h, { colorSpace: THREE.SRGBColorSpace, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false }); quad.material.map = rt.texture; quad.material.needsUpdate = true; }
+      else if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
+      renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(null);
+      const info = renderer.info, auto = info.autoReset; info.autoReset = false; renderer.render(solo, cam2); info.autoReset = auto;   // stats keep the scene's counts
+    },
+    dispose() { rt?.dispose(); quad.geometry.dispose(); quad.material.dispose(); },
+  };
+}
+// 3D-made images on the page (portraits, shop previews). Each remembers how to draw itself again: in the new look when
+// the quality changes, and to suit the width the page really shows it at once that is known (callers only guess the
+// size; in Low that is about 3 CSS pixels per image pixel). again(width in CSS px, or 0 when unknown) returns the image URL.
+const made = new Map();
+let fitting = 0, following = false;
+export const lowSize = (w, min = 16) => Math.max(min, Math.round(w / 12) * 4);   // image pixels across for w CSS px, in steps of 4
+export function madeImage(url, again) {
+  made.set(url, again);
+  if (!following) { following = true; onQuality(() => redraw(true)); }
+  if (!fitting) fitting = requestAnimationFrame(() => { fitting = 0; redraw(false); });   // runs before the next paint
+  return url;
+}
+function redraw(all) {
+  for (const img of document.images) {
+    const src = img.getAttribute("src"), again = src && made.get(src), w = again ? img.clientWidth : 0;
+    if (!again || (!all && !w)) continue;
+    const url = again(w); if (url !== src) { made.set(url, again); img.src = url; }
+  }
+}
 
 // Keeps only ids the catalog knows, so a look from the network can never inject anything. Missing keys get defaults.
 export function cleanLook(l) {
@@ -547,6 +589,25 @@ export function iconCanvas(name) {
   for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) if (on(x, y)) { x2.fillStyle = INK[rows[y][x]]; x2.fillRect(x + 1, y + 1, 1, 1); }
   return (iconCache[name] = c);
 }
+// The High look of an icon: grown to 80 x 80 by three rounds of Scale2x. Same shape and colours, but the stair-stepped
+// diagonals become clean slopes, so it can be drawn smooth at any size. (Low draws iconCanvas() itself, nearest-neighbour.)
+const smoothCache = {};
+export function smoothIcon(name) {
+  if (smoothCache[name]) return smoothCache[name];
+  const src = iconCanvas(name);
+  let n = src.width, px = new Uint32Array(src.getContext("2d").getImageData(0, 0, n, n).data.buffer);
+  for (let k = 0; k < 3; k++, n *= 2) {
+    const out = new Uint32Array(n * n * 4), at = (x, y) => px[Math.min(n - 1, Math.max(0, y)) * n + Math.min(n - 1, Math.max(0, x))];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1), o = 4 * y * n + 2 * x;
+      out[o] = C === A && C !== D && A !== B ? A : P; out[o + 1] = A === B && A !== C && B !== D ? B : P;
+      out[o + 2 * n] = D === C && D !== B && C !== A ? C : P; out[o + 2 * n + 1] = B === D && B !== A && D !== C ? D : P;
+    }
+    px = out;
+  }
+  const c = document.createElement("canvas"); c.width = c.height = n; c.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(px.buffer), n, n), 0, 0);
+  return (smoothCache[name] = c);
+}
 
 // ---------- shop thumbnails ----------
 // A plain bean (no role costume) for thumbnails.
@@ -561,19 +622,33 @@ export const EMOTE_ICON = { wave: "hand", shrug: "quest", laugh: "ha", point: "a
 const DANCE_POSE = { hop: [0.3, 0, 0], stomp: [0.05, 0, 0.32], wiggle: [0, 0.3, -0.38], twirl: [0.3, 0.9, 0.22], moonwaddle: [0, -1.1, 0.14], flip: [1.0, 0, 2.75] };
 let booth; const thumbs = new Map();
 // A small preview image (data URL) of any shop item, for example preview("house", "lighthouse", look).
-// look colours the bean or the house it is shown on. Results are cached.
+// look colours the bean or the house it is shown on; size is about the CSS width it is shown at. Results are cached.
 export function preview(rack, id, look = DEFAULT_LOOK, size = 96) {
   look = cleanLook(look) || DEFAULT_LOOK;
   const tinted = rack === "head" || rack === "pack" || rack === "emote" || rack === "dance" || (rack === "house" && id === "match");
-  const key = `${rack}|${id}|${size}|${tinted ? look.body : ""}`;
-  if (thumbs.has(key)) return thumbs.get(key);
+  const icon = rack === "emote" ? EMOTE_ICON[id] || "star" : ["body", "head", "pack", "house", "killfx", "tomb"].includes(rack) ? null : "note";
+  const again = (w) => {
+    const n = quality() === "low" ? lowSize(w || size, icon ? 12 : 16) : 0;   // Low: image pixels across
+    const key = `${rack}|${id}|${n ? "low" + n : size}|${tinted ? look.body : ""}`;
+    if (!thumbs.has(key)) thumbs.set(key, icon && n && n < 24 ? iconShot(icon, n) : shopShot(rack, id, look, size, n));
+    return thumbs.get(key);
+  };
+  return madeImage(again(0), again);
+}
+// Too small in Low for a bean and its 10 px icon (the in-game emote bar): the icon alone, still about 3 CSS px a pixel.
+function iconShot(name, n) {
+  const c = document.createElement("canvas"); c.width = c.height = n;
+  c.getContext("2d").drawImage(iconCanvas(name), (n - 10) >> 1, (n - 10) >> 1);
+  return c.toDataURL();
+}
+function shopShot(rack, id, look, size, n) {
   if (!booth) {
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50), sun = new THREE.DirectionalLight("#fff", 1.8); sun.position.set(-2, 3, 4);
     scene.add(new THREE.HemisphereLight("#ffffff", "#6a5a9a", 1.7), sun);
-    booth = { renderer, scene, cam, pad: document.createElement("canvas"), bb: new THREE.Box3(), v: new THREE.Vector3() };
+    booth = { renderer, scene, cam, pass: pixelPass(renderer), pad: document.createElement("canvas"), bb: new THREE.Box3(), v: new THREE.Vector3() };
   }
-  const { renderer, scene, cam, pad, bb, v } = booth, plain = { body: look.body, head: "none", pack: "none" };
+  const { renderer, scene, cam, pass, pad, bb, v } = booth, plain = { body: look.body, head: "none", pack: "none" };
   let o, yaw = 0.5, icon = null;
   if (rack === "body") { o = miniBean({ ...plain, body: id }); yaw = 0.12; }
   else if (rack === "head") { o = miniBean({ ...plain, head: id }); yaw = 0.12; }
@@ -588,14 +663,15 @@ export function preview(rack, id, look = DEFAULT_LOOK, size = 96) {
   const half = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, 1.5) * (icon ? 0.68 : 0.55), lift = icon ? half * 0.14 : 0;
   cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half; cam.updateProjectionMatrix();
   cam.position.set(v.x, v.y + lift + (rack === "house" ? 2.2 : rack === "killfx" || rack === "tomb" ? 3.5 : 0), 12); cam.lookAt(v.x, v.y + lift, v.z);
-  const px = Math.round(size * Math.min(Math.max(window.devicePixelRatio || 1, 1), 2));   // size is in CSS pixels; sharp screens get twice the pixels
-  renderer.setSize(px, px, false); renderer.render(scene, cam); scene.remove(o);
-  o.traverse((m) => m.geometry && m.geometry.dispose());
-  let url;
-  if (icon) {   // emotes and dances: the bean with a big pixel icon in the corner
-    pad.width = pad.height = px; const x2 = pad.getContext("2d"), s = Math.max(2, Math.round(px / 28)), m = Math.round((2 * px) / size);
-    x2.imageSmoothingEnabled = false; x2.clearRect(0, 0, px, px); x2.drawImage(renderer.domElement, 0, 0);
-    x2.drawImage(iconCanvas(icon), px - 10 * s - m, m, 10 * s, 10 * s); url = pad.toDataURL();
-  } else url = renderer.domElement.toDataURL();
-  thumbs.set(key, url); return url;
+  const px = n || Math.round(size * Math.min(Math.max(window.devicePixelRatio || 1, 1), 2));   // size is in CSS pixels; sharp screens get twice the pixels
+  renderer.setSize(px, px, false);
+  if (n) pass.render(scene, cam); else renderer.render(scene, cam);
+  scene.remove(o); o.traverse((m) => m.geometry && m.geometry.dispose());
+  if (!icon) return renderer.domElement.toDataURL();
+  // emotes and dances: the bean with a big icon in the corner, smooth in High, its own pixels one to one in Low
+  pad.width = pad.height = px; const x2 = pad.getContext("2d"), s = Math.max(2, Math.round(px / 28)), m = Math.round((2 * px) / size);
+  x2.imageSmoothingEnabled = false; x2.clearRect(0, 0, px, px); x2.drawImage(renderer.domElement, 0, 0);
+  if (n) x2.drawImage(iconCanvas(icon), px - 11, 1);
+  else { x2.imageSmoothingEnabled = true; x2.drawImage(smoothIcon(icon), px - 10 * s - m, m, 10 * s, 10 * s); }
+  return pad.toDataURL();
 }

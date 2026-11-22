@@ -193,10 +193,14 @@ export function initSound(toggle) {
     if (!toggle) return;
     const on = soundOn();
     toggle.setAttribute("aria-label", on ? "Mute sound" : "Turn sound on"); toggle.setAttribute("aria-pressed", String(on));
-    toggle.innerHTML = `<svg viewBox="0 0 32 32" width="24" height="24" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">
-      <path d="M14 5h3v1h-3zM13 6h4v1h-4zM12 7h5v1h-5zM11 8h6v1h-6zM10 9h7v1h-7zM9 10h8v1h-8zM8 11h9v1h-9zM3 12h14v8h-14zM8 20h9v1h-9zM9 21h8v1h-8zM10 22h7v1h-7zM11 23h6v1h-6zM12 24h5v1h-5zM13 25h4v1h-4zM14 26h3v1h-3z"/>${on
-      ? '<path d="M24 7h1v1h-1zM23 8h3v1h-3zM24 9h3v2h-3zM20 11h2v1h-2zM25 11h3v1h-3zM20 12h3v2h-3zM26 12h2v2h-2zM21 14h3v4h-3zM26 14h3v4h-3zM20 18h3v2h-3zM26 18h2v2h-2zM20 20h2v1h-2zM25 20h3v1h-3zM24 21h3v2h-3zM23 23h3v1h-3zM24 24h1v1h-1z"/>'
-      : '<path d="M20 10h2v1h-2zM28 10h2v1h-2zM20 11h3v1h-3zM27 11h3v1h-3zM20 12h4v1h-4zM26 12h4v1h-4zM21 13h8v1h-8zM22 14h6v1h-6zM23 15h4v1h-4zM22 16h6v1h-6zM21 17h8v1h-8zM20 18h4v1h-4zM26 18h4v1h-4zM20 19h3v1h-3zM27 19h3v1h-3zM20 20h2v1h-2zM28 20h2v1h-2z"/>'}</svg>`;
+    // both looks in one picture, CSS shows the one in use (.art-lo, .art-hi). Low is an 8 x 8 pixel speaker at 3px a pixel:
+    // a 2 x 2 back, a cone flaring to full height, then two waves (on) or an X (muted). High is the same, smooth.
+    const lo = "M3 0h1v1h-1zM2 1h2v2h-2zM0 3h4v2h-4zM2 5h2v2h-2zM3 7h1v1h-1z" + (on
+      ? "M6 0h1v1h-1zM7 1h1v6h-1zM5 2h1v4h-1zM6 7h1v1h-1z"
+      : "M5 2h1v1h-1zM7 2h1v1h-1zM6 3h1v2h-1zM5 5h1v1h-1zM7 5h1v1h-1z");
+    toggle.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
+      <g class="art-lo" shape-rendering="crispEdges" transform="scale(3)"><path d="${lo}"/></g>
+      <g class="art-hi"><path d="M3 9.5h3.5L12 4.6v14.8L6.5 14.5H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="${on ? "M15.5 9a4 4 0 0 1 0 6M18.5 6a8.5 8.5 0 0 1 0 12" : "M16 9l6 6M22 9l-6 6"}"/></g></svg>`;
   };
   label();
   toggle?.addEventListener("click", (e) => { e.stopPropagation(); setSound(!soundOn()); });

@@ -1,11 +1,12 @@
 // The loading screen: a pixel progress bar with a bean hopping along it, and rotating tips underneath.
 // It shows real progress when it can measure it, never more than has really loaded, and stays up for at least
-// minMs (two seconds by default) so it never flickers; longer if the work needs longer.
+// minMs (three seconds by default, long enough to read a tip) so it never flickers; longer if the work needs longer.
+// credit adds the small studio line under the logo: the start screen uses it in place of a separate studio sting.
 import { layer, calm, brand, esc, sleep, bean, nextId, BEAN_COLORS } from "./base.mjs";
 import { getSettings } from "./prefs.mjs";
 import { TIPS, TIP_LABEL, pickTip } from "./tips.mjs";
 
-// showLoading(work, { label = "Loading", minMs = 2000, settings, tips = TIPS, tipEvery = 4500 }) -> Promise<result>
+// showLoading(work, { label = "Loading", minMs = 3000, settings, tips = TIPS, tipEvery = 4500, credit = false }) -> Promise<result>
 // work may be:
 //   a Promise                      progress creeps on its own until it settles
 //   a function (report) => Promise  call report(fraction 0 to 1, label?) as you go
@@ -13,7 +14,7 @@ import { TIPS, TIP_LABEL, pickTip } from "./tips.mjs";
 //                                   and the bar moves as each one finishes (the label shows the next unfinished task)
 //   nothing                         just shows the screen for minMs
 // Resolves with the work's result (an array of results for an array), or rejects with its error after closing.
-export async function showLoading(work, { label = "Loading", minMs = 2000, settings, tips = TIPS, tipEvery = 4500 } = {}) {
+export async function showLoading(work, { label = "Loading", minMs = 3000, settings, tips = TIPS, tipEvery = 4500, credit = false } = {}) {
   const s = settings || getSettings(), still = calm(s), showTips = s.gameplay?.showTips !== false && tips?.length;
   const lid = nextId("load");
   const L = layer({ cls: "scr-loading scr-night", label: "Loading", settings: s });
@@ -21,6 +22,7 @@ export async function showLoading(work, { label = "Loading", minMs = 2000, setti
   const L1 = brand("logo-359"), L2 = brand("logo-718");
   L.el.innerHTML = `<div class="scr-load">
       <picture class="scr-load-logo"><source type="image/webp" srcset="${L1}.webp 359w, ${L2}.webp 718w" sizes="300px"><img src="${L1}.png" srcset="${L1}.png 359w, ${L2}.png 718w" sizes="300px" width="359" height="175" alt="Puddleton After Dark"></picture>
+      ${credit ? `<p class="scr-load-credit">an After Dark game</p>` : ""}
       <div class="scr-load-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="${lid}">
         <div class="scr-load-walker">${bean(BEAN_COLORS[Math.floor(Math.random() * BEAN_COLORS.length)], { size: 3 })}</div>
         <div class="scr-load-track"><i class="scr-load-fill"></i></div>

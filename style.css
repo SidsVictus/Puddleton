@@ -204,7 +204,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 #heroBeans { flex-wrap: nowrap; } #heroBeans .bean { width: min(88px, 17vw); height: auto; }
 
 /* ---------- scenes: a pixel backdrop per screen (the island stays on the intro screens) ---------- */
-.scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; will-change: transform; }   /* own layer: the animated backdrop repaints without repainting the panels over it */
 .scene i { position: absolute; inset: 0; background: center bottom / cover no-repeat; image-rendering: pixelated; animation: scenein .8s steps(8); }
 @keyframes scenein { from { opacity: 0; } }
 .scened .scene::after { content: ""; position: absolute; inset: 0; --shade: .5;
@@ -294,6 +294,13 @@ html, body { max-width: 100%; overflow-x: clip; }
 .game .tile:hover { border-image-source: url(ui/tile-gold.svg); color: var(--amber); }
 .game .tile:active { transform: translateY(2px); }
 .game .tile.danger span { color: var(--rose); }
+/* first visit, after the guide: How to play glows and a speech bubble over it says "New here?" */
+.game .tile.glow { position: relative; border-image-source: url(ui/tile-gold.svg); color: var(--amber); animation: tile-glow 1.6s steps(4) infinite; }
+@keyframes tile-glow { 50% { filter: drop-shadow(0 0 7px rgba(255, 196, 90, .8)); } }
+.game .newhere { position: absolute; bottom: calc(100% + 16px); left: 50%; transform: translateX(-50%); padding: 8px 14px 10px; white-space: nowrap; pointer-events: none;
+  background: var(--moon); color: var(--ink); font: 400 20px / 1 var(--pix); letter-spacing: .03em; box-shadow: 4px 4px 0 rgba(6, 4, 26, .55); animation: newhere 1.4s steps(4) infinite; }
+.game .newhere::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -8px; border: 8px solid transparent; border-top-color: var(--moon); }
+@keyframes newhere { 50% { transform: translate(-50%, -5px); } }
 .game .iconbtn.tile { width: 48px; color: var(--amber); } .game .iconbtn.tile[aria-pressed="false"] { color: var(--faint); }
 .game .link { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 0; text-decoration: underline dotted; text-underline-offset: 4px; }
 
@@ -746,8 +753,38 @@ body.booting > :not(.scr-layer) { visibility: hidden; }
 html[data-pad-colors="safe"] .game .side { color: var(--ink) !important; }
 
 /* the connection screens can open with the network already gone: their plate art travels inline, so the panel draws */
-.scr-ov .scr-plate { border-image-source: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20width%3D%2224%22%20height%3D%2224%22%20shape-rendering%3D%22crispEdges%22%3E%3Cpath%20fill%3D%22%2306041a%22%20d%3D%22M4%200h16v1h-16zM2%201h2v1h-2zM20%201h2v1h-2zM1%202h1v2h-1zM22%202h1v2h-1zM0%204h1v16h-1zM23%204h1v16h-1zM1%2020h1v2h-1zM22%2020h1v2h-1zM2%2022h2v1h-2zM20%2022h2v1h-2zM4%2023h16v1h-16z%22%2F%3E%3Cpath%20fill%3D%22%235a4f9c%22%20d%3D%22M4%201h16v1h-16zM2%202h20v1h-20zM2%203h2v1h-2zM20%203h2v1h-2zM1%204h2v16h-2zM21%204h2v16h-2zM2%2020h2v1h-2zM20%2020h2v1h-2zM2%2021h20v1h-20zM4%2022h16v1h-16z%22%2F%3E%3Cg%20opacity%3D%220.94%22%3E%3Cpath%20fill%3D%22%23110d2b%22%20d%3D%22M4%203h16v1h-16zM3%204h18v16h-18zM4%2020h16v1h-16z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"); }
-.scr-ov .scr-plate.gold { border-image-source: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20width%3D%2224%22%20height%3D%2224%22%20shape-rendering%3D%22crispEdges%22%3E%3Cpath%20fill%3D%22%2306041a%22%20d%3D%22M4%200h16v1h-16zM2%201h2v1h-2zM20%201h2v1h-2zM1%202h1v2h-1zM22%202h1v2h-1zM0%204h1v16h-1zM23%204h1v16h-1zM1%2020h1v2h-1zM22%2020h1v2h-1zM2%2022h2v1h-2zM20%2022h2v1h-2zM4%2023h16v1h-16z%22%2F%3E%3Cpath%20fill%3D%22%23ffc45a%22%20d%3D%22M4%201h16v1h-16zM2%202h20v1h-20zM2%203h2v1h-2zM20%203h2v1h-2zM1%204h2v16h-2zM21%204h2v16h-2zM2%2020h2v1h-2zM20%2020h2v1h-2zM2%2021h20v1h-20zM4%2022h16v1h-16z%22%2F%3E%3Cg%20opacity%3D%220.96%22%3E%3Cpath%20fill%3D%22%2317123a%22%20d%3D%22M4%203h16v1h-16zM3%204h18v16h-18zM4%2020h16v1h-16z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"); }
+.scr-ov .scr-plate { border-image-source: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20width%3D%2224%22%20height%3D%2224%22%3E%3Cpath%20fill%3D%22%2306041a%22%20fill-rule%3D%22evenodd%22%20d%3D%22M6%200H18A6%206%200%200%201%2024%206V18A6%206%200%200%201%2018%2024H6A6%206%200%200%201%200%2018V6A6%206%200%200%201%206%200ZM6%203H18A3%203%200%200%201%2021%206V18A3%203%200%200%201%2018%2021H6A3%203%200%200%201%203%2018V6A3%203%200%200%201%206%203Z%22%2F%3E%3Cpath%20fill%3D%22%235a4f9c%22%20fill-rule%3D%22evenodd%22%20d%3D%22M6%201H18A5%205%200%200%201%2023%206V18A5%205%200%200%201%2018%2023H6A5%205%200%200%201%201%2018V6A5%205%200%200%201%206%201ZM6%203H18A3%203%200%200%201%2021%206V18A3%203%200%200%201%2018%2021H6A3%203%200%200%201%203%2018V6A3%203%200%200%201%206%203Z%22%2F%3E%3Cpath%20fill%3D%22%23110d2b%22%20opacity%3D%220.94%22%20d%3D%22M6%203H18A3%203%200%200%201%2021%206V18A3%203%200%200%201%2018%2021H6A3%203%200%200%201%203%2018V6A3%203%200%200%201%206%203Z%22%2F%3E%3C%2Fsvg%3E"); }
+.scr-ov .scr-plate.gold { border-image-source: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20width%3D%2224%22%20height%3D%2224%22%3E%3Cpath%20fill%3D%22%2306041a%22%20fill-rule%3D%22evenodd%22%20d%3D%22M6%200H18A6%206%200%200%201%2024%206V18A6%206%200%200%201%2018%2024H6A6%206%200%200%201%200%2018V6A6%206%200%200%201%206%200ZM6%203H18A3%203%200%200%201%2021%206V18A3%203%200%200%201%2018%2021H6A3%203%200%200%201%203%2018V6A3%203%200%200%201%206%203Z%22%2F%3E%3Cpath%20fill%3D%22%23ffc45a%22%20fill-rule%3D%22evenodd%22%20d%3D%22M6%201H18A5%205%200%200%201%2023%206V18A5%205%200%200%201%2018%2023H6A5%205%200%200%201%201%2018V6A5%205%200%200%201%206%201ZM6%203H18A3%203%200%200%201%2021%206V18A3%203%200%200%201%2018%2021H6A3%203%200%200%201%203%2018V6A3%203%200%200%201%206%203Z%22%2F%3E%3Cpath%20fill%3D%22%2317123a%22%20opacity%3D%220.96%22%20d%3D%22M6%203H18A3%203%200%200%201%2021%206V18A3%203%200%200%201%2018%2021H6A3%203%200%200%201%203%2018V6A3%203%200%200%201%206%203Z%22%2F%3E%3C%2Fsvg%3E"); }
 /* room above every card for its tag (Your pick, Crew pick, On trial, Offline), clear of the emote bar and the row above */
 .game .roster { margin-top: 26px; row-gap: 26px; }
 .game .ptag { max-width: calc(100% + 24px); overflow: hidden; text-overflow: ellipsis; }
+
+/* picture quality: icons and frames */
+/* Low swaps every frame and icon drawn from ui/ for its chunky pixel twin in ui/low (same size, same 8px slices). Each
+   rule mirrors one above with the same selector, so hover, focus and colour variants keep winning. */
+html[data-quality="low"] .game .plate, html[data-quality="low"] .game .reveal, html[data-quality="low"] .game .walk { border-image-source: url(ui/low/plate.svg); }
+html[data-quality="low"] .game .plate.gold, html[data-quality="low"] .game .reveal { border-image-source: url(ui/low/plate-gold.svg); }
+html[data-quality="low"] .game .plate.teal { border-image-source: url(ui/low/plate-teal.svg); }
+html[data-quality="low"] .game .plate.rose { border-image-source: url(ui/low/plate-rose.svg); }
+html[data-quality="low"] .game .tile { border-image-source: url(ui/low/tile.svg); }
+html[data-quality="low"] .game .tile:hover { border-image-source: url(ui/low/tile-gold.svg); }
+html[data-quality="low"] .game input, html[data-quality="low"] .game select { border-image-source: url(ui/low/slot.svg); }
+html[data-quality="low"] .game input:focus, html[data-quality="low"] .game select:focus { border-image-source: url(ui/low/slot-focus.svg); }
+html[data-quality="low"] .game .option:hover, html[data-quality="low"] .game .option:focus-visible { border-image-source: url(ui/low/plate-gold.svg); }
+html[data-quality="low"] .game .mode.on::after { background-image: url(ui/low/check.svg); }
+html[data-quality="low"] .scr-ov .scr-plate { border-image-source: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2012%2012%22%20width%3D%2224%22%20height%3D%2224%22%20shape-rendering%3D%22crispEdges%22%3E%3Cpath%20fill%3D%22%2306041a%22%20d%3D%22M2%200h8v1h-8zM1%201h1v1h-1zM10%201h1v1h-1zM0%202h1v8h-1zM11%202h1v8h-1zM1%2010h1v1h-1zM10%2010h1v1h-1zM2%2011h8v1h-8z%22%2F%3E%3Cpath%20fill%3D%22%235a4f9c%22%20d%3D%22M2%201h8v1h-8zM1%202h1v8h-1zM10%202h1v8h-1zM2%2010h8v1h-8z%22%2F%3E%3Cg%20opacity%3D%220.94%22%3E%3Cpath%20fill%3D%22%23110d2b%22%20d%3D%22M2%202h8v8h-8z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"); }
+html[data-quality="low"] .scr-ov .scr-plate.gold { border-image-source: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2012%2012%22%20width%3D%2224%22%20height%3D%2224%22%20shape-rendering%3D%22crispEdges%22%3E%3Cpath%20fill%3D%22%2306041a%22%20d%3D%22M2%200h8v1h-8zM1%201h1v1h-1zM10%201h1v1h-1zM0%202h1v8h-1zM11%202h1v8h-1zM1%2010h1v1h-1zM10%2010h1v1h-1zM2%2011h8v1h-8z%22%2F%3E%3Cpath%20fill%3D%22%23ffc45a%22%20d%3D%22M2%201h8v1h-8zM1%202h1v8h-1zM10%202h1v8h-1zM2%2010h8v1h-8z%22%2F%3E%3Cg%20opacity%3D%220.96%22%3E%3Cpath%20fill%3D%22%2317123a%22%20d%3D%22M2%202h8v8h-8z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"); }
+
+/* picture quality: drawn art */
+/* art that carries both looks (pic() in screens/base.mjs, the sound toggle, the roster's more button): only the one in use is drawn */
+html[data-quality="low"] .art-hi, html:not([data-quality="low"]) .art-lo { display: none; }
+/* button corners: smooth and round like the ui/*.svg plates in High; in Low the same 2px pixel step as ui/low/plate.svg */
+html:not([data-quality="low"]) { --corners: inset(0 round 6px); }
+html[data-quality="low"] { --corners: polygon(0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px,
+  100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%,
+  4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px)); }
+/* dithered rules: Low checkers share the 3px pixel (a 4px rule becomes one row of 3px dots); High draws a thin smooth line */
+html[data-quality="low"] .dither { background: repeating-conic-gradient(var(--dim) 0 25%, transparent 0 50%) 0 1px / 6px 6px repeat-x; }
+html[data-quality="low"] .game .or::before, html[data-quality="low"] .game .or::after { background: linear-gradient(90deg, var(--dim) 50%, transparent 0) 0 50% / 6px 3px repeat-x; }
+html:not([data-quality="low"]) .dither, html:not([data-quality="low"]) .game .or::before, html:not([data-quality="low"]) .game .or::after {
+  background: linear-gradient(var(--dim), var(--dim)) 0 50% / 100% 2px no-repeat; border-radius: 1px; }

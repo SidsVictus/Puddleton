@@ -1,5 +1,19 @@
-// The first thing on screen: the After Dark sting starts as soon as this tiny module and the screen helpers have
-// loaded, while the browser is still fetching three.js and the rest of the game. play.js waits for it.
-import { play } from "./screens/boot.mjs";
+// The first thing on screen: the start screen (the logo, a small studio credit, the loading bar and tips) shows as
+// soon as this tiny module and the screen helpers have loaded, while the browser still fetches three.js and the rest
+// of the game. play.js hands it the rest of the start up work with begin(tasks) and waits for `started`.
+import { showLoading } from "./screens/loading.mjs";
 
-export const sting = play().catch(() => ({ skipped: true }));
+let hand;
+const handed = new Promise((r) => (hand = r));
+// tasks: [{ label, weight = 1, run: () => Promise }]; they run together and the label shows the next unfinished one.
+export const begin = (tasks) => hand(tasks);
+
+export const started = showLoading(async (report) => {
+  report(0, "Loading the island");
+  const tasks = await handed, left = new Set(tasks);
+  const total = 1 + tasks.reduce((a, t) => a + (t.weight ?? 1), 0);   // the game files themselves count as one share
+  let done = 1;
+  const next = () => [...left].find((t) => t.label)?.label;
+  report(done / total, next());
+  await Promise.all(tasks.map(async (t) => { await t.run(); left.delete(t); done += t.weight ?? 1; report(done / total, next()); }));
+}, { label: "Loading the island", credit: true });

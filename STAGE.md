@@ -21,7 +21,7 @@ const stage = createStage(canvas, { onTap, wander: true, grain: 300 });
   Dragging sideways turns the town (it settles on the nearest gap between two houses). A tap during a cutscene skips
   it. In the hideout a tap picks a house.
 - `wander`: living beans other than `me` stroll around the square during the day. Default true.
-- `grain`: no longer used. The stage renders at the screen's own pixel density (at most 2 render pixels per CSS pixel), stepping down to 1 on slow devices; `stats.ratio` reports the current value.
+- `grain`: no longer used. Picture quality (quality.mjs) picks the look. High renders at the screen's own pixel density (at most 2 render pixels per CSS pixel), stepping down to 1 on slow devices, and on Auto fires `pad:slow` once if it stays slow at 1. Low draws into a small target (one render pixel per 3 CSS px, `LOW_RATIO` in cosmetics.mjs) and scales it up with square pixels. `stats.ratio` reports the current value.
 
 ## Town and state
 

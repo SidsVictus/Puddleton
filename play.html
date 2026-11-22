@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+mly31C+QQSAeXrtrKLIXFjPzAin+3Nu2O5/lqJcZv8=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://puddleton-server.sidsvictus.workers.dev wss://puddleton-server.sidsvictus.workers.dev http://localhost:8787 ws://localhost:8787; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#0e0b24">
-<title>Play Puddleton: Free Online Mafia Party Game</title>
+<title>Puddleton</title>
 <meta name="description" content="Play Puddleton, a free online Mafia party game for 4 to 16 players. Jelly-bean folk, secret roles and spooky nights on a floating pixel island. Join a room with friends or hop into Quick Play on any phone or PC.">
 <link rel="canonical" href="https://puddleton.surge.sh/play.html">
 <meta property="og:type" content="website">
@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="screens/screens.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 <link rel="modulepreload" href="./start.mjs">
-<link rel="modulepreload" href="./screens/boot.mjs">
+<link rel="modulepreload" href="./screens/loading.mjs">
 <link rel="modulepreload" href="./vendor/three.module.js">
 <script type="module" src="./start.mjs"></script>
 </head>
@@ -119,7 +119,7 @@
       <p class="note" id="rosterNote">Tap a player to report, mute or block them.</p>
     </section>
     <section class="plate settings" id="hostSettings" hidden>
-      <span class="eyebrow host"><img src="ui/crown.svg" alt="">Host settings</span>
+      <span class="eyebrow host"><img src="ui/crown.svg" data-sm alt="">Host settings</span>
       <h3 class="label">Game mode</h3>
       <div class="modes" id="modePicker"></div>
       <label class="switch"><input type="checkbox" id="chatToggle" checked><i></i>Town Square group chat</label>
@@ -171,7 +171,7 @@
       <div class="identity plate gold" id="roleCard"></div>
       <div class="prompt plate" id="actionPrompt" role="status"></div>
       <div class="host-tools plate" id="hostTools" hidden>
-        <span class="eyebrow host"><img src="ui/crown.svg" alt="">Host controls</span>
+        <span class="eyebrow host"><img src="ui/crown.svg" data-sm alt="">Host controls</span>
         <button class="btn big" id="dealBtn" hidden>Deal the cards</button>
         <button class="btn big" id="advanceBtn" hidden></button>
         <button class="btn alt" id="endVoteBtn" hidden>End voting</button>

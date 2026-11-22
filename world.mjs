@@ -1,6 +1,8 @@
-// A floating-island dream world rendered in 3D at the screen's own resolution.
+// A floating-island dream world rendered in 3D: smooth at the screen's own resolution in the High look, chunky square
+// pixels in the Low look (quality.mjs).
 import * as THREE from "three";
-import { bodyMaterial, bodyGeometry, dress, wearsHat, animate, buildHouse } from "./cosmetics.mjs";
+import { bodyMaterial, bodyGeometry, dress, wearsHat, animate, buildHouse, pixelPass, LOW_RATIO, madeImage, lowSize } from "./cosmetics.mjs";
+import { quality, qualityPref, onQuality } from "./quality.mjs";
 
 export const BEAN_COLORS = ["#ff9db5", "#8fd6ff", "#ffd97a", "#a5ecb0", "#cdb4ff", "#ffb98a", "#8fe8d8", "#f3a0f7"];
 const grad = new THREE.DataTexture(new Uint8Array([80, 160, 255]), 3, 1, THREE.RedFormat);
@@ -14,22 +16,23 @@ const cyl = (a, b, h, s = 12) => new THREE.CylinderGeometry(a, b, h, s);
 const winMat = new THREE.MeshBasicMaterial({ color: "#ffd98a" });
 const dpr = () => window.devicePixelRatio || 1;
 
-// How many render pixels a live canvas draws per CSS pixel: the screen's own density, at most 2.
-// Frames are timed in windows of 60 frames or 2 seconds. Two slow windows in a row (over 25 ms a frame on average,
-// so under 40 frames a second) step the ratio down by half, never below 1. The first window after a start or a
-// pause is not judged, and one long hitch (a shader compiling, a town being built) counts as 100 ms at most.
-// Picture quality from the settings: "auto" adapts (steps down on slow devices), "high" keeps up to 2 render pixels
-// per CSS pixel, "low" draws 1. Every sharpness() follows it; its next tick() reports the change.
-let QUALITY = "auto", qualityRev = 0;
-export function setQuality(q) { const next = ["auto", "high", "low"].includes(q) ? q : "auto"; if (next !== QUALITY) { QUALITY = next; qualityRev++; } }
+// How many render pixels a live canvas draws per CSS pixel. High: the screen's own density, at most 2. Low: one per
+// 3 CSS pixels, with no anti-aliasing (s.low: draw through pixelPass() and show the canvas with square pixels).
+// On the Auto setting a High look adapts. Frames are timed in windows of 60 frames or 2 seconds. Two slow windows in a
+// row (over 25 ms a frame on average, so under 40 frames a second) step the ratio down by half, never below 1; two more
+// at 1 fire one "pad:slow" window event (Auto may then pick Low). The first window after a start, a pause or a quality
+// change is not judged, and one long hitch (a shader compiling, a town being built) counts as 100 ms at most.
+let qualityRev = 0, slowSent = false;
+onQuality(() => qualityRev++);
 export function sharpness() {
   let cap = 2, last = -Infinity, start = 0, sum = 0, frames = 0, slow = 0, warm = true, rev = qualityRev;
   const s = {
-    get ratio() { return QUALITY === "low" ? 1 : Math.min(dpr(), QUALITY === "high" ? 2 : cap); },
-    // Call once per drawn frame; true means the ratio changed (a slow device, or the quality setting) and the renderer should be resized.
+    low: quality() === "low",
+    get ratio() { return s.low ? LOW_RATIO : Math.min(dpr(), qualityPref() === "auto" ? cap : 2); },
+    // Call once per drawn frame; true means the ratio changed (a slow device, or the picture quality) and the renderer should be resized.
     tick(now) {
-      if (rev !== qualityRev) { rev = qualityRev; cap = 2; slow = 0; return true; }
-      if (QUALITY !== "auto") return false;
+      if (rev !== qualityRev) { rev = qualityRev; s.low = quality() === "low"; cap = 2; slow = 0; warm = true; return true; }
+      if (s.low || qualityPref() !== "auto") return false;
       const gap = now - last; last = now;
       if (gap > 1000) { start = now; sum = frames = 0; warm = true; return false; }   // the first frame, or the first after a pause
       sum += Math.min(gap, 100); frames++;
@@ -37,8 +40,11 @@ export function sharpness() {
       const late = sum / frames > 25; start = now; sum = frames = 0;
       if (warm) { warm = false; return false; }
       slow = late ? slow + 1 : 0;
-      if (slow < 2 || s.ratio <= 1) return false;
-      cap = Math.max(1, s.ratio - 0.5); slow = 0; return true;
+      if (slow < 2) return false;
+      slow = 0;
+      if (s.ratio > 1) { cap = Math.max(1, s.ratio - 0.5); return true; }
+      if (!slowSent) { slowSent = true; dispatchEvent(new CustomEvent("pad:slow")); }
+      return false;
     },
   };
   return s;
@@ -104,31 +110,49 @@ export function makeBean(role, look = BEAN_COLORS[0], dead = false) {
   return g;
 }
 
-// Renders a character to a small canvas once and returns it as an image URL (used by the game UI).
-let studio; const shots = new Map();
+// Renders a character to a small canvas once and returns it as an image URL (used by the game UI). High: smooth, 170 px
+// (340 on sharp screens), more where the page shows it bigger. Low: square pixels, about 3 CSS px each. (See madeImage.)
+let studio; const shots = new Map(), fitted = new Map();
+const usual = () => Math.round(170 * Math.min(Math.max(dpr(), 1), 2));   // 170px renders (340px on sharp screens), shown at 112 CSS px or less
 export function portrait(role, look, dead = false, view = "front") {
-  const key = `${role}|${JSON.stringify(look)}|${dead}|${view}`;
-  if (shots.has(key)) return shots.get(key);
+  const id = `${role}|${JSON.stringify(look)}|${dead}|${view}`;
+  const again = (w) => {   // image pixels across: Low about one per 3 CSS px; High the usual, or more where the page shows it bigger (the role reveal)
+    const low = quality() === "low", k = `${id}|${low}`;
+    const px = !w ? fitted.get(k) || (low ? 24 : usual()) : low ? lowSize(w) : Math.max(usual(), Math.ceil((w * Math.min(dpr(), 3)) / 8) * 8);
+    fitted.set(k, px);   // the next guess for this bean
+    if (!shots.has(`${k}|${px}`)) shots.set(`${k}|${px}`, shoot(role, look, dead, view, px, low));
+    return shots.get(`${k}|${px}`);
+  };
+  return madeImage(again(0), again);
+}
+function shoot(role, look, dead, view, px, low) {
   if (!studio) {
-    const size = Math.round(170 * Math.min(Math.max(dpr(), 1), 2));   // 170px renders (340px on sharp screens), shown at 112 CSS px or less
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true }); renderer.setSize(size, size, false);
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1.1, 1.1, 2.05, -0.15, 0.1, 20); cam.position.z = 5;
     const sun = new THREE.DirectionalLight("#fff", 1.8); sun.position.set(-2, 3, 4);
     scene.add(new THREE.HemisphereLight("#ffffff", "#6a5a9a", 1.7), sun);
-    studio = { renderer, scene, cam };
+    studio = { renderer, scene, cam, pass: pixelPass(renderer) };
   }
+  const { renderer, scene, cam, pass } = studio;
+  if (renderer.domElement.width !== px) renderer.setSize(px, px, false);
   const pack = typeof look === "object" && look?.pack && look.pack !== "none";   // turn a little so a backpack shows in game
   const b = makeBean(role, look, dead); b.rotation.y = view === "back" ? Math.PI * 0.78 : pack ? 0.62 : 0.12;
-  studio.scene.add(b); studio.renderer.render(studio.scene, studio.cam); studio.scene.remove(b);
-  const url = studio.renderer.domElement.toDataURL(); shots.set(key, url); return url;
+  scene.add(b);
+  if (low) pass.render(scene, cam); else renderer.render(scene, cam);
+  scene.remove(b);
+  return renderer.domElement.toDataURL();
 }
 
 // The wardrobe mirror: one bean turning slowly so hats and packs show from every side.
 // Drag or swipe the bean to spin it; let go and it keeps turning that way, then drifts back to a slow idle spin.
 export function createMirror(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true }); renderer.setSize(300, 300, false);
-  const fit = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (w && h) { renderer.setPixelRatio(Math.min(dpr(), 3)); renderer.setSize(w, h, false); } };   // one render pixel per screen pixel
-  new ResizeObserver(fit).observe(canvas); fit(); canvas.style.imageRendering = "auto";
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true }), pass = pixelPass(renderer); renderer.setSize(300, 300, false);
+  let low = false;
+  const fit = () => {   // High: one render pixel per screen pixel. Low: one per 3 CSS pixels
+    low = quality() === "low"; canvas.style.imageRendering = low ? "pixelated" : "auto";
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (w && h) { renderer.setPixelRatio(low ? LOW_RATIO : Math.min(dpr(), 3)); renderer.setSize(w, h, false); }
+  };
+  new ResizeObserver(fit).observe(canvas); onQuality(fit); fit();
   const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1.15, 1.15, 2.05, -0.25, 0.1, 20); cam.position.z = 5;
   const sun = new THREE.DirectionalLight("#fff", 1.8); sun.position.set(-2, 3, 4);
   scene.add(new THREE.HemisphereLight("#ffffff", "#6a5a9a", 1.7), sun);
@@ -146,7 +170,7 @@ export function createMirror(canvas) {
     const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
     if (!drag) { angle += vel; vel *= Math.pow(0.93, dt * 60); idle += dt; if (idle > 2 && Math.abs(vel) < 0.004) angle += dt * 0.45; }
     if (bean) { bean.rotation.y = angle; bean.position.y = Math.abs(Math.sin(t * 2.2)) * 0.06; animate(bean, t); }
-    renderer.render(scene, cam);
+    if (low) pass.render(scene, cam); else renderer.render(scene, cam);
   };
   return {
     // mode "bean" shows the bean; mode "house" shows the player's house with the bean at the door, framed to fit.
@@ -173,17 +197,16 @@ export function createMirror(canvas) {
 // ---------- world ----------
 const SKY = { night: ["#070620", "#1d1650", "#4a2f7a"], dawn: ["#2b3a8c", "#c86a8a", "#ffc38a"] };
 export function createWorld(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }), sharp = sharpness();
-  canvas.style.imageRendering = "auto";
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }), sharp = sharpness(), pass = pixelPass(renderer);
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
-  const u = { top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, low: { value: new THREE.Color() } };
+  const u = { top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, low: { value: new THREE.Color() }, dither: { value: 0 } };
   const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 16, 12), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false, uniforms: u,
     vertexShader: "varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; varying float h;
+    fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform float dither; varying float h;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2.0 + a.y * a.y * 0.75); }
-      void main(){ float t = clamp(h * 1.5 + 0.38, 0.0, 1.0);
-        float q = clamp(floor(t * 9.0 + b2(0.5 * gl_FragCoord.xy) * 0.25 + b2(gl_FragCoord.xy)) / 9.0, 0.0, 1.0);   // ordered dither between bands
+      void main(){ float q = clamp(h * 1.5 + 0.38, 0.0, 1.0);   // High: a smooth blend. Low: 9 bands with an ordered dither between them
+        if (dither > 0.5) q = clamp(floor(q * 9.0 + b2(0.5 * gl_FragCoord.xy) * 0.25 + b2(gl_FragCoord.xy)) / 9.0, 0.0, 1.0);
         gl_FragColor = vec4(q < 0.5 ? mix(low, mid, q * 2.0) : mix(mid, top, q * 2.0 - 1.0), 1.0);
         #include <colorspace_fragment>
       }`,
@@ -218,6 +241,9 @@ export function createWorld(canvas) {
   const w = { scene, camera, renderer, islands: [], beans: [], ticks: [], day: 0, setDay(v) { w.target = v; }, target: 0 };
   const fit = () => {
     const cw = canvas.clientWidth || 1, ch = canvas.clientHeight || 1;
+    canvas.style.imageRendering = sharp.low ? "pixelated" : "auto";
+    for (const s of stars) s.material.size = sharp.low ? 3 : 1;   // sizes are scaled by the pixel ratio: one CSS px in High, one square pixel in Low
+    u.dither.value = sharp.low ? 1 : 0;
     renderer.setPixelRatio(sharp.ratio); renderer.setSize(cw, ch, false); camera.aspect = cw / ch; camera.fov = camera.aspect >= 1 ? 42 : Math.min(72, 42 + (1 - camera.aspect) * 55);   // wider view on portrait screens
     camera.updateProjectionMatrix(); w.onFit?.(cw, ch);
   };
@@ -243,7 +269,7 @@ export function createWorld(canvas) {
       b.getWorldPosition(wp); b.rotation.y = Math.atan2(camera.position.x - wp.x, camera.position.z - wp.z);
       b.position.y = b.userData.y + Math.abs(Math.sin(t * 1.1 + i * 1.7)) * 0.05;
     });
-    renderer.render(scene, camera);
+    if (sharp.low) pass.render(scene, camera); else renderer.render(scene, camera);
   };
   renderer.setAnimationLoop(loop);
   w.run = (on) => renderer.setAnimationLoop(on ? loop : null);   // paused while a scene backdrop covers the island

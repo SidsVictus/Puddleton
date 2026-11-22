@@ -1,5 +1,6 @@
-"""Pixel icons for the screens (gear, refresh, flag and friends), drawn with the same rasteriser as ../../tools/ui.py
-so they match the ui/*.svg set: 32 x 32 art with a 64 x 64 detail drawing, a one pixel dark outline, the same palette.
+"""Icons for the screens (gear, refresh, flag and friends), drawn with the same shapes and writer as ../../tools/ui.py
+so they match the ui/*.svg set in both picture looks: smooth vector art here (High) and 16 x 16 chunky pixels in low/
+(Low), with the same palette and dark outline, plus 8 x 8 twins in low/sm/ for the few drawn at 16px or less.
 Run: python screens/icons/draw.py"""
 import math
 import os
@@ -93,6 +94,66 @@ ICONS = {
     ],
 }
 
+# Low versions of icons whose thin parts melt on 16 pixels: the same picture with parts snapped to whole pixels
+# (one pixel is two shape units) and kept a pixel apart.
+LOW_FIX = {
+    "refresh": [
+        ("a", arc(15, 17, 9, 4, 40, 265)),
+        ("a", poly((16, 1), (28, 8), (16, 15))),
+    ],
+    "copy": [
+        ("d", rect(12, 4, 28, 22)),
+        ("m", rect(4, 10, 20, 28)),
+        ("k", rect(8, 14, 16, 16)), ("k", rect(8, 18, 16, 20)), ("k", rect(8, 22, 14, 24)),
+    ],
+    "people": [
+        ("t", circle(22, 9, 4.5)),
+        ("t", rect(16, 16, 30, 28, 3)),
+        ("k", circle(10, 12, 6.5)),
+        ("k", rect(0, 18, 20, 32, 4)),
+        ("r", circle(10, 12, 4.5)),
+        ("r", rect(2, 20, 18, 30, 3)),
+    ],
+    "bubble": [
+        ("m", rect(2, 4, 30, 22, 4)),
+        ("m", poly((8, 20), (16, 20), (8, 28))),
+        ("k", rect(8, 10, 12, 14)), ("k", rect(14, 10, 18, 14)), ("k", rect(20, 10, 24, 14)),
+    ],
+    "nosignal": [
+        ("p", arc(16, 24, 15, 4, 220, 320)),
+        ("p", arc(16, 24, 9, 4, 220, 320)),
+        ("p", circle(16, 24, 3)),
+        ("r", line((5, 5), (27, 27), w=4)),
+    ],
+    "ferry": [
+        ("m", rect(8, 8, 24, 18)),
+        ("t", rect(10, 10, 14, 14)), ("t", rect(18, 10, 22, 14)),
+        ("r", rect(12, 2, 18, 8)),
+        ("a", poly((0, 18), (32, 18), (26, 28), (6, 28))),
+    ],
+}
+
+# Small Low twins (low/sm/, see SM_FIX in ../../tools/ui.py) for the icons drawn at 16px or less: Settings rows and the
+# quick chat topics (chevron) and the profile's new link button (refresh).
+SM_FIX = {
+    "chevron": (8, [
+        "aa..",
+        ".aa.",
+        "..aa",
+        ".aa.",
+        "aa..",
+    ]),
+    "refresh": (8, [
+        "..aaa.a",
+        ".a...aa",
+        "a...aaa",
+        "a......",
+        "a.....a",
+        ".a...a.",
+        "..aaa..",
+    ]),
+}
+
 if __name__ == "__main__":
     for k, v in ICONS.items():
-        ui.icon(k, v)
+        ui.icon(k, v, LOW_FIX.get(k), SM_FIX.get(k))
