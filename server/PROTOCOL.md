@@ -73,6 +73,8 @@ failed token: `403 E_TURNSTILE`.
 Body: `{ "band": "child"|"teen"|"adult", "turnstile": "<token>", "device": "<device string>" }`
 - `200 { "gid": "g_...", "secret": "<64 hex>", "band": "teen" }`. Store all three.
 - `400 E_BAND`, `403 E_TURNSTILE`, `403 E_BANNED { reason, until, appeal }` (this device is banned).
+- Owner only: a request with `Authorization: Bearer ADMIN_TOKEN` skips the Turnstile check (for test players in
+  live rooms). Game pages never send it.
 
 ### `GET /me` (auth)
 `200 { "gid", "band", "name", "look", "stats", "created", "sanction" }`. `name` and `look` are the last ones used in

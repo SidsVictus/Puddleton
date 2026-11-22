@@ -92,7 +92,8 @@ async function route(req, env, url, path, origin) {
   if (path === "/guest" && method === "POST") {
     const b = await readBody(req);
     if (!b || !BANDS.includes(b.band)) return E("E_BAND", 400, "Pick an age group: child, teen or adult.");
-    if (!(await turnstileOk(env, b.turnstile))) return E("E_TURNSTILE", 403, "Please complete the check.");
+    // The owner may skip Turnstile with the admin token, to make test players (bots) for live rooms.
+    if (!adminOk(req, env) && !(await turnstileOk(env, b.turnstile))) return E("E_TURNSTILE", 403, "Please complete the check.");
     const dev = await deviceHash(env, b.device);
     const ban = await db.activeSanction(env, pending, "ban", { device: dev });
     if (ban) return J(banBody(ban), 403);
