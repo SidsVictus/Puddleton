@@ -24,7 +24,8 @@ export default {
   async fetch(req, env, ctx) {
     pending.workerReq++;
     const url = new URL(req.url), path = url.pathname, origin = req.headers.get("Origin") || "";
-    const allowed = originAllowed(origin, env, path.startsWith("/admin/"));
+    // The admin page may use the admin endpoints, and /guest plus the game socket for the owner's test bots.
+    const allowed = originAllowed(origin, env, path.startsWith("/admin/") || path === "/guest" || path.startsWith("/ws/"));
     if (req.method === "OPTIONS") return allowed ? new Response(null, { status: 204, headers: cors(origin) }) : new Response(null, { status: 403 });
     if (!allowed) return json({ error: "E_ORIGIN", msg: "This site may not use the Puddleton API." }, 403);
     try {

@@ -22,7 +22,8 @@ Contents: 1 Basics, 2 Identity, 3 HTTP endpoints, 4 The WebSocket, 5 Client to s
 - **Origin.** Every HTTP request and every WebSocket upgrade must come from an allowed origin:
   `https://beta.puddleton.surge.sh`, `https://puddleton.surge.sh`, `https://puddleton.online`,
   `https://www.puddleton.online`, any `http://localhost:<port>` or `http://127.0.0.1:<port>`, plus origins the owner
-  adds in `EXTRA_ORIGINS`. The admin endpoints also accept `https://admin.puddleton.surge.sh`. Browsers send `Origin`
+  adds in `EXTRA_ORIGINS`. The admin endpoints, `POST /guest` and the game socket also accept
+  `https://admin.puddleton.surge.sh` (its bot panel runs test players with the admin token). Browsers send `Origin`
   on these cross-site calls automatically. Anything else gets `403 {"error":"E_ORIGIN"}`; a request with no
   `Origin` is refused too.
 - **CORS.** Preflight `OPTIONS` answers `204` with `Access-Control-Allow-Origin: <origin>`,

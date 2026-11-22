@@ -7,7 +7,7 @@ export const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{6}$/;
 export const GID_RE = /^g_[a-z2-7]{20}$/;
 export const BANDS = ["child", "teen", "adult"];
 
-// Browsers that may talk to the game API. Admin endpoints also accept the admin page.
+// Browsers that may talk to the game API. Admin endpoints, /guest and the game socket also accept the admin page.
 const GAME_ORIGINS = ["https://beta.puddleton.surge.sh", "https://puddleton.surge.sh", "https://puddleton.online", "https://www.puddleton.online"];
 const ADMIN_ORIGINS = ["https://admin.puddleton.surge.sh"];
 const LOCAL_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
