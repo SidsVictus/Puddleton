@@ -23,7 +23,9 @@ const GRACE = 4000, CREDITS = 25000, AUTOSTART = 15000, GM_TAKEOVER = 60000, LOB
 // Server housekeeping in ms, not scaled.
 const FLUSH_MS = 8000, BUSY_SAVE_MS = 60000, REG_DEBOUNCE = 2000, USAGE_EVERY = 300000, HELLO_MS = 10000, LIVE_MS = 75000, PURGE_MS = 3600000;
 const MAX_SEATS = 16, MIN_PLAYERS = 4, AUTOSTART_AT = 6, STRIKES_TO_MUTE = 3, PAIR_FLAG = 5, MAX_SOCKETS = 40, MAX_MSG = 4096;
-const VIEW_LINES = 200, MAX_EVENTS = 4000;
+const VIEW_LINES = 200, MAX_EVENTS = 4000, LOBBY_LINES = 60;
+// The lobby's Town Square: its last lines, and the strikes and filter mutes that carry between the lobby and the game.
+const freshLobbyChat = (carry) => ({ lines: [], n: 0, strikes: { ...(carry?.strikes || {}) }, muted: [...(carry?.muted || [])], signals: {} });
 const HOUSEKEEPING = ["sweep", "lobby"];   // timers whose changes need no write: a stale copy only makes a handler run early
 const RESERVED = ["gm", "system", "host", "admin", "__proto__", "constructor", "prototype"];
 const WHISPER = ["everyone", "friends", "nobody"];   // who may whisper to a player (their own setting)
@@ -187,7 +189,7 @@ export class Room extends DurableObject {
   isGm(gid) { return !!this.m.gm && this.m.gm.gid === gid; }
   isHost(gid) { return this.m.host === gid; }
   hostId() { const s = this.m.seats.find((x) => x.gid === this.m.host); return s ? s.id : ""; }
-  muted(s) { return (this.g?.muted || []).includes(s.gid) || (s.muteUntil || 0) > Date.now(); }
+  muted(s) { return ((this.g || this.m?.lobbyChat)?.muted || []).includes(s.gid) || (s.muteUntil || 0) > Date.now(); }
   // Who may type, and who may read typed lines (see PROTOCOL.md, chat tiers).
   seesTyped(s) { return this.m.cls !== "kids" && s.band !== "child" && (this.m.settings.visibility === "private" || (s.band === "adult" && !!s.freeChat)); }
   tier(s) { return this.seesTyped(s) && !this.muted(s) ? "text" : "phrase"; }
@@ -355,6 +357,7 @@ export class Room extends DurableObject {
     } else {
       this.checkAutostart(now);
       this.broadcastLobby();
+      this.sendLobbyChat(s);
     }
     if (fresh) { this.regDirty(); this.dirtyMeta = true; this.save(); } else { if (!this.g) this.regDirty(); this.markMeta(); }
   }
@@ -390,7 +393,9 @@ export class Room extends DurableObject {
         if ("filter" in msg) s.filter = s.band === "adult" && msg.filter === "strict" ? "strict" : null;
         if ("whisper" in msg) { s.whisper = whisperPref(msg.whisper); if (s.whisper !== "friends") this.friendSets.delete(s.gid); }
         this.markMeta();
-        return inGame ? this.sendState(s) : send(ws, { t: "you", you: this.you(s) });
+        if (inGame) return this.sendState(s);
+        send(ws, { t: "you", you: this.you(s) });
+        return this.sendLobbyChat(s);
       case "leave": return this.leave(s, ws);
       case "settings": if (!host) return err("E_HOST"); if (inGame) return err("E_STATE"); return this.onSettings(s, msg, err);
       case "start": if (!host) return err("E_HOST"); if (inGame) return err("E_STATE"); return this.startGame(err);
@@ -398,6 +403,7 @@ export class Room extends DurableObject {
       case "votekick": if (inGame || gm) return err("E_STATE"); return this.onVotekick(s, msg.id, err);
       case "endroom": if (!host) return err("E_HOST"); return this.closeRoom("host");
       case "act": if (!inGame || gm) return err("E_STATE"); this.g.active[s.id] = 1; return this.onAct(s, msg.a, err, now);
+      case "lobbychat": if (inGame || gm) return err("E_STATE"); return this.onLobbyChat(s, msg, err, now);
       case "advance": return this.onAdvance(s, err);
       case "deal": if (!gm || !inGame || this.g.dealt) return err("E_STATE"); return this.deal();
       case "rig": if (!gm || !inGame) return err("E_STATE"); return this.onRig(s, msg, err);
@@ -495,9 +501,11 @@ export class Room extends DurableObject {
     if (!secretOk) next.secretWhispers = false;
     if (m.narrator !== "human") next.rigged = false;
     if (this.g || this.m.closed) return err("E_STATE");   // re-checked after the await
+    const typingChanged = next.visibility !== cur.visibility, chatChanged = next.communityChat !== cur.communityChat;
     m.settings = next;
     this.log("settings", { mode: next.mode, visibility: next.visibility, secretWhispers: next.secretWhispers });
     this.broadcastLobby();
+    if (typingChanged || chatChanged) for (const v of this.members()) if (this.online(v.gid)) { if (typingChanged) this.toGid(v.gid, { t: "you", you: this.you(v) }); this.sendLobbyChat(v); }
     this.regDirty(); this.dirtyMeta = true; this.save();
   }
 
@@ -566,7 +574,9 @@ export class Room extends DurableObject {
       communityChat: m.settings.communityChat, seed: crypto.getRandomValues(new Uint32Array(1))[0] % 2147483647,
       victimSeesKiller: m.settings.victimSeesKiller, traits: Object.fromEntries(m.seats.map((s) => [s.id, traitsOf(s.look)])),
     });
-    this.g = { st, startedAt: now, dealt: false, deadline: 0, kinds: { chat: [], ghost: [], dm: [] }, safe: { chat: {}, ghost: {}, dm: {} }, shadow: {}, strikes: {}, muted: [], signals: {}, pairs: {}, active: {}, log: [] };
+    const lc = m.lobbyChat;
+    this.g = { st, startedAt: now, dealt: false, deadline: 0, kinds: { chat: [], ghost: [], dm: [] }, safe: { chat: {}, ghost: {}, dm: {} }, shadow: {}, strikes: { ...(lc?.strikes || {}) }, muted: [...(lc?.muted || [])], signals: {}, pairs: {}, active: {}, log: [] };
+    m.lobbyChat = null;
     m.votekicks = {}; m.reportsBy = {};
     for (const k of ["autostart", "drop", "idle"]) this.clearTimer(k);
     m.pendingGames = (m.pendingGames || 0) + 1;
@@ -789,6 +799,58 @@ export class Room extends DurableObject {
     }
     this.markGame();
   }
+  // ---------- the Town Square in the lobby ----------
+  // Before a game the square is open to every seated player (not the Grandmaster, who has no name yet) while the
+  // host has Town Square chat on. Same tiers, filter, limits, strikes, signals and reports as the square in a game.
+  // Its last LOBBY_LINES lines live in the room meta; each line keeps its author's gid, its kind (p phrase, t typed),
+  // its safe version for standard readers, and "only" when it was filtered and is echoed to its author alone.
+  chatBag() { return this.g || (this.m.lobbyChat ||= freshLobbyChat()); }
+  async onLobbyChat(s, a, err, now) {
+    if (!this.m.settings.communityChat) return err("E_CHAT_DISABLED");
+    const names = this.activeSeats().map((x) => x.id);
+    let text, phrase = null;
+    if (a.phrase != null) {
+      const p = checkPhrase(a.phrase, { players: names });
+      if (!p.ok) return err("E_PHRASE");
+      text = p.text; phrase = p.id;
+    } else if (typeof a.text === "string") {
+      if (this.tier(s) !== "text") return err(this.muted(s) && this.seesTyped(s) ? "E_MUTED" : "E_PHRASE_ONLY");
+      text = a.text.trim();
+      if (!text || [...text].length > 200) return err("E_TEXT");
+    } else return err("E_PROTO");
+    const lim = this.limiter.check(s.gid, now, dupKey(text));
+    if (lim.slowedNow) { s.slowUntil = lim.until; this.toGid(s.gid, { t: "slowed", until: lim.until, serverNow: now }); this.log("slowed", { gid: s.gid, until: lim.until }); this.markMeta(); }
+    if (!lim.ok) return err(lim.code);
+    const lc = this.chatBag(), line = { n: ++lc.n, gid: s.gid, from: s.id, text, kind: phrase ? "p" : "t" };
+    let blocked = null;
+    if (!phrase) {
+      const cats = signalsOf(text);
+      if (cats.length) this.flagSignals(s, cats, text, "lobby", null);
+      const level = this.sendLevel(s), f = checkText(text, { names, level });
+      if (!f.ok) blocked = f.reason;
+      else if (level === "minimal") { const safe = safeVersion(text, { names }); if (safe !== text) line.safe = safe; }
+    }
+    if (blocked) line.only = s.gid;
+    lc.lines.push(line);
+    if (lc.lines.length > LOBBY_LINES) lc.lines.splice(0, lc.lines.length - LOBBY_LINES);
+    this.log("lobbychat", { from: s.id, text, phrase, ...(blocked && { blocked }), ...(line.safe !== undefined && { safe: line.safe }) });
+    this.toMembers(() => true, (v) => { const l = this.lobbyLineFor(line, v); return l && { t: "chat", ch: "lobby", line: l }; });
+    this.markMeta();
+    if (blocked) await this.strike(s, blocked);
+  }
+  // A lobby line as one member may read it (the rules of lineFor and lineVisible), or null.
+  lobbyLineFor(line, v) {
+    const own = v.gid === line.gid;
+    if (line.only && !own) return null;
+    if (line.kind === "t" && !own && !this.seesTyped(v)) return null;
+    if (line.safe !== undefined && !own && this.safeReader(v)) return line.safe === null ? null : { from: line.from, text: line.safe };
+    return { from: line.from, text: line.text };
+  }
+  sendLobbyChat(s) {
+    if (this.g) return;
+    this.toGid(s.gid, { t: "lobbychat", on: this.m.settings.communityChat, lines: (this.m.lobbyChat?.lines || []).map((l) => this.lobbyLineFor(l, s)).filter(Boolean) });
+  }
+
   async friendsOf(s) {
     let set = this.friendSets.get(s.gid);
     if (!set) { set = new Set(await db.getFriends(this.env, this.usage, s.gid)); if (whisperPref(s.whisper) === "friends") this.friendSets.set(s.gid, set); }
@@ -816,7 +878,7 @@ export class Room extends DurableObject {
   }
 
   async strike(s, reason) {
-    const g = this.g, now = Date.now();
+    const g = this.chatBag(), now = Date.now();
     g.strikes[s.gid] = (g.strikes[s.gid] || 0) + 1;
     this.log("strike", { gid: s.gid, reason, count: g.strikes[s.gid] });
     if (g.strikes[s.gid] < STRIKES_TO_MUTE || g.muted.includes(s.gid)) return;
@@ -853,7 +915,7 @@ export class Room extends DurableObject {
 
   // Grooming signals: silently filed as automatic reports, once per category per player per match.
   flagSignals(s, cats, text, ch, to) {
-    const g = this.g, done = (g.signals[s.gid] ||= []);
+    const g = this.chatBag(), done = (g.signals[s.gid] ||= []);
     for (const cat of cats) {
       if (done.includes(cat)) continue;
       done.push(cat);
@@ -1007,6 +1069,7 @@ export class Room extends DurableObject {
   returnToLobby() {
     const m = this.m;
     if (this.g) m.lastLog = this.g.log;
+    m.lobbyChat = freshLobbyChat(this.g);
     this.g = null;
     m.seats = m.seats.filter((s) => !s.left && this.online(s.gid));
     for (const s of m.seats) Object.assign(s, { missed: 0, offline: 0, offSince: 0 });
@@ -1017,6 +1080,7 @@ export class Room extends DurableObject {
     this.log("lobby", { players: m.seats.map((s) => s.id) });
     this.toAll({ t: "notice", code: "lobby" });
     this.broadcastLobby();
+    for (const v of this.members()) if (this.online(v.gid)) this.sendLobbyChat(v);
     if (this.socks().size === 0) this.timer("idle", Date.now() + this.ms(IDLE_LOBBY));
     this.checkAutostart(Date.now());
     this.regDirty(); this.dirtyMeta = true; this.dirtyGame = true; this.save();

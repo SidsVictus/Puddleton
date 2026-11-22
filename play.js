@@ -124,7 +124,7 @@ const app = {
   link: null, code: "", cls: "13+", you: null, pass: "", lobby: null, offset: 0, settingsCache: { communityChat: true },
   view: null, gm: null, meta: newMeta(), mode: "classic", target: undefined, lastPhaseKey: "", dmWith: "", seenDms: 0, finalRoles: null, revealed: false,
   looks: Object.create(null), screen: "home", wardrobeFrom: "home", logSeen: 0, afterReveal: false, phaseTotal: 0, fresh: true,
-  lastSend: 0, slowUntil: 0, calm: false, reconnect: null, leaving: false, replaying: false, replayCache: null, creditsOn: false,
+  lastSend: 0, slowUntil: 0, lobbyChat: [], lobbyChatOn: true, calm: false, reconnect: null, leaving: false, replaying: false, replayCache: null, creditsOn: false,
 };
 
 // ---------- helpers ----------
@@ -423,7 +423,7 @@ function goHome(msg = "") {
 function dropRoom() {
   if (app.link) { const l = app.link; app.link = null; l.close(); }
   app.reconnect?.close(); app.reconnect = null;
-  app.code = ""; app.lobby = null; app.you = null; app.pass = ""; app.leaving = false;
+  app.code = ""; app.lobby = null; app.you = null; app.pass = ""; app.leaving = false; app.lobbyChat = [];
   resetGame();
   phrasewheel.close();
   if (location.search.includes("room=")) history.replaceState(null, "", location.pathname);
@@ -454,7 +454,8 @@ function onServer(m) {
     case "gmview": return onGmView(m);
     case "final": app.finalRoles = m.roles; return renderGame();
     case "credits": return onCredits(m);
-    case "chat": return onLine(m.ch === "ghost" ? "ghostChat" : "chat", m.line);
+    case "chat": return m.ch === "lobby" ? onLobbyLine(m.line) : onLine(m.ch === "ghost" ? "ghostChat" : "chat", m.line);
+    case "lobbychat": app.lobbyChat = m.lines || []; app.lobbyChatOn = m.on !== false; return renderLobbyChat();
     case "dm": return onLine("dms", m.line);
     case "tally": app.meta.tally = { cast: m.cast, alive: m.alive }; return renderVotes();
     case "picks": if (app.view) { app.view.teamPicks = m.teamPicks; renderGame(); } return;
@@ -465,7 +466,7 @@ function onServer(m) {
     case "notice": return onNotice(m);
     case "rigged": toast("Done. Nobody suspects a thing."); return;
     case "replay": app.replayCache = m; return playReplay(m);
-    case "slowed": app.slowUntil = m.until - app.offset; renderTalk(); setTimeout(renderTalk, Math.max(0, app.slowUntil - Date.now()) + 100); return;
+    case "slowed": app.slowUntil = m.until - app.offset; renderTalk(); renderLobbyChat(); setTimeout(() => { renderTalk(); renderLobbyChat(); }, Math.max(0, app.slowUntil - Date.now()) + 100); return;
     case "sanction":
       if (m.type === "mute") sanction.show({ kind: "muted", reason: sanctionReason(m.reason), until: m.until ? new Date(m.until - app.offset) : null, playerName: app.you?.id || app.name, appealEmail: m.appeal, settings: getSettings() });
       return;
@@ -527,7 +528,7 @@ function onErr(m) {
   if (!app.you) return;   // a refused hello: the join flow explains it once, on the screen the player is on
   const text = m.code === "E_WHISPER_PREF" ? m.msg : SAY[m.code] || m.msg || "That did not work.";
   if (m.code === "E_SLOWED" && !app.slowUntil) app.slowUntil = Date.now() + 3000;
-  if (CHAT_ERRORS.includes(m.code) && (app.view || app.gm)) { chatNote(text); return; }
+  if (CHAT_ERRORS.includes(m.code) && (app.view || app.gm || app.screen === "lobby")) { chatNote(text); return; }
   if (m.code === "E_PASS_NEEDED" || m.code === "E_NOT_ALLOWED") $("#visNote").textContent = text;
   toast(text);
 }
@@ -577,6 +578,7 @@ function renderLobby() {
   $("#guestRules").textContent = [st.communityChat ? "Town Square chat is on" : "Town Square chat is off", kids ? "" : st.secretWhispers ? "whispers are secret" : "the table sees who whispers", st.victimSeesKiller ? "victims see their killer" : ""].filter(Boolean).join(", ") + ".";
   $("#waitText").textContent = countdown ? `Starting in ${countdown}` : L.quick ? "Starts by itself when 6 players are in" : "Waiting for the host to start";
   $("#guestHint").textContent = need > 0 ? `The game needs ${need} more ${need === 1 ? "player" : "players"}.` : "Everyone is here. The host can start any moment.";
+  renderLobbyChat();
   updateHud();
 }
 function renderCountdown() {
@@ -629,7 +631,8 @@ function renderVotes() {
     : app.gm || !app.meta.deadline ? "All votes are in." : "All votes are in. The day is ending.";
   if (app.gm && base.phase === "day") setPrompt(tally.cast < tally.alive ? "" : "gold", `${tally.cast} of ${tally.alive} votes in`, tally.cast < tally.alive ? "End the day when the talking is done." : "All votes are in. End the day.");
 }
-// The banner when night falls or day dawns: what just happened, and what to do next. It never blocks input.
+// The banner when night falls or day dawns: what just happened, and what to do next. It never blocks input. It stays
+// at least five seconds (six with news to read) so there is time to read it; its X closes it sooner.
 function phaseCard(base, v) {
   const { phase, day, log } = base, fresh = log.slice(app.logSeen), night = phase === "night";
   app.logSeen = log.length;
@@ -641,16 +644,18 @@ function phaseCard(base, v) {
   if (v && fresh.some((ev) => ev.player === v.you)) lines.push(`<p class="bad">${v.deathBy?.killer ? `That was you. ${esc(v.deathBy.killer)} got you.` : "That was you."} You are out, but you can keep watching.</p>`);
   else if (v && v.alive) lines.push(`<p class="do">${trial ? (v.accused === v.you ? "You are on trial. Say your last words in the Square." : "Listen to the last words.") : night ? (ROLE[v.role].act ? "You have a move to make tonight." : "You sleep tonight.") : "Talk it over, then vote."}</p>`);
   $("#phaseCardIcon").src = uiIcon(night ? "moon" : "sun");
+  $("#phaseCardCloseIcon").src = uiIcon("close");
   $("#phaseCardTitle").textContent = trial ? `The trial of ${base.accused}` : night ? `Night ${day} falls` : `Day ${day} dawns`;
   $("#phaseCardText").innerHTML = lines.join("");
-  const card = $("#phaseCard"), hold = fresh.length ? 4600 : 2600;
+  const card = $("#phaseCard"), hold = fresh.length ? 6000 : 5000;
   card.className = `phasecard ${night ? "night" : "day"}`;
   card.style.setProperty("--hold", `${hold}ms`);
   card.hidden = false;
   void card.offsetWidth;   // restart the animation
   card.classList.add("go");
-  clearTimeout(phaseCard.t); phaseCard.t = setTimeout(() => (card.hidden = true), hold);
+  clearTimeout(phaseCard.t); phaseCard.t = setTimeout(closePhaseCard, hold);
 }
+function closePhaseCard() { clearTimeout(phaseCard.t); $("#phaseCard").hidden = true; }
 // One banner answers "what do I do now?" at every moment: [frame, title, detail, extra button].
 function guide(v, phase, canNight) {
   const t = app.target;
@@ -975,10 +980,10 @@ function lineHtml(m) {
   return `<li class="${m.from === app.you?.id ? "mine" : ""}"><b>${nameBtn(m.from)}</b>${esc(m.text)}</li>`;
 }
 function chatNote(text, pane) {
-  const id = pane || ($("#pane-dms").classList.contains("active") ? "dmNote" : $("#pane-ghosts").classList.contains("active") ? "ghostNote" : "chatNote");
+  const id = pane || (!app.view && !app.gm ? "lobbyChatNote" : $("#pane-dms").classList.contains("active") ? "dmNote" : $("#pane-ghosts").classList.contains("active") ? "ghostNote" : "chatNote");
   const el = $("#" + id);
   el.textContent = text; el.classList.add("flash");
-  clearTimeout(chatNote.t); chatNote.t = setTimeout(() => { el.classList.remove("flash"); renderTalk(); }, 3200);
+  clearTimeout(chatNote.t); chatNote.t = setTimeout(() => { el.classList.remove("flash"); renderTalk(); renderLobbyChat(); }, 3200);
 }
 function whyPhrases() {
   const y = app.you;
@@ -1042,6 +1047,31 @@ function renderTalk() {
     $("#dmBadge").textContent = incoming > app.seenDms ? "1" : "";
   }
 }
+// The Town Square in the lobby: open to the seated players before the game while the host has it on. The server
+// sends only the lines this player may read; muted and blocked players' lines are hidden here as well.
+function onLobbyLine(line) {
+  app.lobbyChat.push(line);
+  if (app.lobbyChat.length > 60) app.lobbyChat.splice(0, app.lobbyChat.length - 60);
+  if (line.from !== app.you?.id && !isMuted(line.from) && !isBlocked(line.from) && app.screen === "lobby") sfx("bubble");
+  renderLobbyChat();
+}
+function renderLobbyChat() {
+  const L = app.lobby;
+  if (!L) return;
+  const on = app.lobbyChatOn && L.settings.communityChat !== false, gm = !!app.you?.gm, slowed = app.slowUntil > Date.now();
+  $("#lobbyChat").hidden = !on;
+  if (!on) return;
+  const el = $("#lobbyChatList"), atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  const lines = app.lobbyChat.filter((m) => m.from === app.you?.id || (!isMuted(m.from) && !isBlocked(m.from)));
+  el.innerHTML = lines.map(lineHtml).join("") || `<li class="empty">Say hello while the town gathers.</li>`;
+  if (atEnd || el.dataset.n !== String(app.lobbyChat.length)) el.scrollTop = 1e9;
+  el.dataset.n = String(app.lobbyChat.length);
+  const typing = canType();
+  $("#lobbyChatForm").hidden = gm;
+  $("#lobbyChatForm").classList.toggle("phrases-only", !typing);
+  $("#lobbyChatInput").hidden = !typing; $("#lobbyChatSend").hidden = !typing;
+  if (!$("#lobbyChatNote").classList.contains("flash")) $("#lobbyChatNote").textContent = gm ? "The Grandmaster listens while the town gathers." : slowed ? SAY.E_SLOWED : typing ? "" : whyPhrases();
+}
 // One message per second for everyone (three seconds while slowed down); the server enforces the same.
 function readyToSend() {
   const gap = app.slowUntil > Date.now() ? 3000 : 1000;
@@ -1054,17 +1084,19 @@ function sendTyped(kind, input) {
   if (!text) return;
   if (kind === "dm" && !app.dmWith) { chatNote("Pick who to whisper to first.", "dmNote"); return; }
   if (!readyToSend()) return;
-  act(kind === "dm" ? { kind, to: app.dmWith, text } : { kind, text });
+  if (kind === "lobby") app.link?.send({ t: "lobbychat", text });
+  else act(kind === "dm" ? { kind, to: app.dmWith, text } : { kind, text });
   input.value = "";
 }
 async function sendPhrase(where) {
-  const kind = where === "dm" ? "dm" : where === "ghost" ? "ghostchat" : "chat";
+  const kind = where === "dm" ? "dm" : where === "ghost" ? "ghostchat" : where === "lobby" ? "lobby" : "chat";
   if (kind === "dm" && !app.dmWith) { chatNote("Pick who to whisper to first.", "dmNote"); return; }
   const list = players().map((id, i) => ({ id, name: id, color: BEAN_COLORS[i % BEAN_COLORS.length] }));
   const pick = await phrasewheel.open({ catalog: PHRASE_CATALOG, players: list, title: kind === "dm" ? `Whisper to ${app.dmWith}` : kind === "ghostchat" ? "Ghost chat" : "Quick chat", settings: getSettings() });
   if (!pick || !readyToSend()) return;
   const args = (PHRASE_BY_ID[pick.id]?.args || []).map((k) => pick.args[k]);
-  act(kind === "dm" ? { kind, to: app.dmWith, phrase: { id: pick.id, args } } : { kind, phrase: { id: pick.id, args } });
+  if (kind === "lobby") app.link?.send({ t: "lobbychat", phrase: { id: pick.id, args } });
+  else act(kind === "dm" ? { kind, to: app.dmWith, phrase: { id: pick.id, args } } : { kind, phrase: { id: pick.id, args } });
 }
 
 // ---------- tap a player: report, mute, block, and the host's and table's tools ----------
@@ -1529,6 +1561,7 @@ document.addEventListener("click", async (e) => {
   }
   if (t.hasAttribute("data-open-help")) { $("#help").hidden = false; return; }
   if (t.hasAttribute("data-close-help")) { $("#help").hidden = true; return; }
+  if (t.id === "phaseCardClose") return closePhaseCard();
 });
 $("#chatToggle").onchange = (e) => sendSettings({ communityChat: e.target.checked });
 $("#killerToggle").onchange = (e) => sendSettings({ victimSeesKiller: e.target.checked });
@@ -1545,6 +1578,7 @@ $("#passForm").onsubmit = (e) => {
 };
 $("#ghostForm").onsubmit = (e) => { e.preventDefault(); sendTyped("ghostchat", $("#ghostInput")); };
 $("#chatForm").onsubmit = (e) => { e.preventDefault(); sendTyped("chat", $("#chatInput")); };
+$("#lobbyChatForm").onsubmit = (e) => { e.preventDefault(); sendTyped("lobby", $("#lobbyChatInput")); };
 $("#dmForm").onsubmit = (e) => { e.preventDefault(); sendTyped("dm", $("#dmInput")); };
 $("#dmTo").onchange = () => { app.dmWith = $("#dmTo").value; renderTalk(); };
 $("#codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#joinBtn").click(); });

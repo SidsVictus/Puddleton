@@ -118,6 +118,12 @@
       <ul class="street" id="roster"></ul>
       <p class="note" id="rosterNote">Tap a player to report, mute or block them.</p>
     </section>
+    <section class="plate lobby-chat" id="lobbyChat">
+      <span class="eyebrow">Town Square</span>
+      <ul class="msgs" id="lobbyChatList" aria-live="polite"></ul>
+      <form class="composer" id="lobbyChatForm"><button type="button" class="tile phrase-btn" data-phrase="lobby" aria-label="Quick chat phrases"><img src="screens/icons/bubble.svg" alt=""><span>Phrases</span></button><input id="lobbyChatInput" maxlength="200" placeholder="Say hello while you wait" aria-label="Message to the room"><button class="btn small" id="lobbyChatSend">Send</button></form>
+      <p class="note chat-note" id="lobbyChatNote" role="status"></p>
+    </section>
     <section class="plate settings" id="hostSettings" hidden>
       <span class="eyebrow host"><img src="ui/crown.svg" data-sm alt="">Host settings</span>
       <h3 class="label">Game mode</h3>
@@ -215,7 +221,7 @@
 </main>
 
 <!-- a short banner when night falls or day dawns; it never takes input away from the game -->
-<div class="phasecard" id="phaseCard" hidden aria-live="polite"><div class="band"><img id="phaseCardIcon" src="ui/moon.svg" alt=""><h2 id="phaseCardTitle"></h2><div id="phaseCardText"></div></div></div>
+<div class="phasecard" id="phaseCard" hidden aria-live="polite"><div class="band"><button class="tile phasecard-x" id="phaseCardClose" aria-label="Close"><img id="phaseCardCloseIcon" src="ui/close.svg" alt=""></button><img id="phaseCardIcon" src="ui/moon.svg" alt=""><h2 id="phaseCardTitle"></h2><div id="phaseCardText"></div></div></div>
 <div class="curtain" id="reveal" hidden><div class="reveal" id="revealCard"></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -263,7 +269,7 @@
           <dt>Speed</dt><dd>Classic roles with lightning-fast timers. Whole games in minutes.</dd>
         </dl></article>
       <article class="page"><h3><span>Chapter 8</span>Talking</h3>
-        <p><b>Whispers</b> are private messages: pick a player and write to them. The whole table sees that you whispered, never what you said; only the two of you, and the Grandmaster, can read it. The <b>Town Square</b> group chat opens during the day when the host switches it on. Once you are out, you chat only with the other ghosts.</p>
+        <p><b>Whispers</b> are private messages: pick a player and write to them. The whole table sees that you whispered, never what you said; only the two of you, and the Grandmaster, can read it. The <b>Town Square</b> group chat is open in the lobby before the game and again during the day, when the host switches it on. Once you are out, you chat only with the other ghosts.</p>
         <p>Players under 13 chat with ready-made phrases and have no whispers. Tap any player to report, mute or block them.</p>
         <p>Find the Mafia, trust no muffin, and have fun. This manual is always available in the Help section.</p></article>
     </div>

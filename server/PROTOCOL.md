@@ -264,6 +264,8 @@ needed, `you.gm: true`.
   other people in the room have voted, the player is removed like a host kick and a report is filed
   automatically. Counts are in `lobby.votekicks`.
 - `{ "t": "endroom" }` (host): closes the room for everyone (`closed {reason:"host"}`).
+- `{ "t": "lobbychat", "text": "hi all" }` or `{ "t": "lobbychat", "phrase": { "id", "args" } }` (players, lobby):
+  the Town Square before the game (section 8.1). The Grandmaster only reads it (`E_STATE`).
 
 ### Game messages
 - `{ "t": "act", "a": { ... } }` (players, after the deal):
@@ -324,6 +326,12 @@ Sent to everyone on every lobby change (joins, leaves, online changes, looks, se
 - `card`: the player's `gid`, for `GET /profile/<gid>`.
 - `countdown`: when a Quick Play room auto starts (server ms), or 0.
 - `lastGame`: a replay of the previous game is available (`replay`).
+
+### `lobbychat`
+`{ "t": "lobbychat", "on": true, "lines": [ { "from": "Bo", "text": "hi all" } ] }`: the lobby Town Square as you may
+read it (section 8.2), the last 60 lines. Sent to you on joining the lobby, on the way back from a game (empty: a
+new lobby starts a new square), and when your `prefs` or the room's visibility or `communityChat` change. New lines
+then come one by one as `{ "t": "chat", "ch": "lobby", "line": { "from", "text" } }`.
 
 ### `shuffle`
 `{ "t": "shuffle" }`: the game started with a human Grandmaster; wait for the deal (show the shuffle screen).
@@ -450,6 +458,9 @@ be reached at all, remember the day and the number of failed attempts and send `
 Town Square (`chat`, by day and from the accused during the trial; off when `communityChat` is false), whispers
 (`dm`, any phase, living senders), ghost chat (`ghostchat`, the dead). The engine rules apply (engine/API.md
 section 5): for example `E_PHASE` for the square at night.
+Before the game the square is open in the lobby too (`lobbychat`, every seated player, while `communityChat` is on):
+the same tiers, phrases, filter, rate limits, strikes and reports. It starts empty at every lobby and is cleared when
+the game starts; strikes and filter mutes carry from the lobby into the game and back.
 
 ### 8.2 Tiers (who may type)
 | Player | Kids room | 13+ public room | 13+ private room |

@@ -448,6 +448,10 @@ html, body { max-width: 100%; overflow-x: clip; }
   box-shadow: 0 -4px 0 #06041a, 0 4px 0 #06041a, 0 -8px 0 var(--amber), 0 8px 0 var(--amber), 0 -12px 0 #06041a, 0 12px 0 #06041a; }
 .phasecard.night .band { box-shadow: 0 -4px 0 #06041a, 0 4px 0 #06041a, 0 -8px 0 #8f7fe8, 0 8px 0 #8f7fe8, 0 -12px 0 #06041a, 0 12px 0 #06041a; }
 .phasecard.go .band { animation: pc-band .3s steps(4) both; }
+/* its X: the one part of the banner that takes a tap */
+.phasecard .band { position: relative; }
+.phasecard .phasecard-x { position: absolute; top: 12px; right: 12px; pointer-events: auto; }
+.phasecard .phasecard-x img { width: 24px; height: 24px; }
 .phasecard img { width: 64px; height: 64px; image-rendering: pixelated; }
 .phasecard h2 { font-size: clamp(48px, 9vw, 96px); margin: 0; color: var(--moon); text-shadow: 4px 4px 0 #5a2a6a; line-height: 1; }
 .phasecard p { margin: 8px 0 0; max-width: 46ch; font-size: 17px; line-height: 1.45; color: var(--text); }
@@ -788,3 +792,12 @@ html[data-quality="low"] .dither { background: repeating-conic-gradient(var(--di
 html[data-quality="low"] .game .or::before, html[data-quality="low"] .game .or::after { background: linear-gradient(90deg, var(--dim) 50%, transparent 0) 0 50% / 6px 3px repeat-x; }
 html:not([data-quality="low"]) .dither, html:not([data-quality="low"]) .game .or::before, html:not([data-quality="low"]) .game .or::after {
   background: linear-gradient(var(--dim), var(--dim)) 0 50% / 100% 2px no-repeat; border-radius: 1px; }
+/* the Town Square in the lobby: under the roster, beside the settings; last on phones so Start stays near the top */
+.game .lobby { grid-template-areas: "code side" "roster side" "chat side"; grid-template-rows: auto auto 1fr; }
+.game .lobby-chat { grid-area: chat; display: grid; gap: 8px; align-content: start; }
+.game .lobby-chat[hidden] { display: none; }
+.game .lobby-chat .msgs { height: 24vh; }
+@media (max-width: 800px) {
+  .game .lobby { grid-template-areas: "code" "roster" "side" "chat"; grid-template-rows: none; }
+  .game .lobby-chat .msgs { height: 30vh; }
+}
