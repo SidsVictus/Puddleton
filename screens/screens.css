@@ -445,6 +445,14 @@ html[data-quality="low"] .scr-full { background-image: url(../scenes/low/dock.sv
 .scr-pf-me .scr-pf-face { width: 160px; height: 160px; margin: -4px 0 -10px; }
 .scr-pf-id { display: grid; justify-items: center; gap: 10px; }
 .scr-pf-name { font: 400 40px / 1 var(--pix); letter-spacing: .03em; color: var(--moon); text-shadow: 3px 3px 0 #5a2a6a; overflow-wrap: anywhere; }
+/* the pencil beside the name, and the box it turns into */
+.scr-pf-namerow { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
+.scr-pf-namerow .scr-pf-name { min-width: 0; }
+.scr-pf-rename { display: flex; align-items: center; gap: 8px; width: min(100%, 300px); }
+.scr-pf-rename .scr-input { flex: 1; min-width: 0; }
+.scr-pf-namenote { margin: -4px 0 0; color: var(--teal); font-weight: 700; font-size: calc(14px * var(--t)); }
+.scr-pf-namenote.bad { color: var(--rose); }
+.scr-pf-namenote:empty { display: none; }
 .scr-pf-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 0; }
 .scr-pf-stats div { display: grid; justify-items: center; gap: 4px; padding: 8px 4px 10px; background: #1c1644; box-shadow: inset 0 0 0 2px #3a3360; }
 .scr-pf-stats dt { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }

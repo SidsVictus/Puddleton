@@ -17,6 +17,7 @@ let current = null;
 //   friends: [{ id, name, look, online, room: { code, mode, players, max } | null }],
 //   requests: [{ id, name, look }],                    people who opened your friend link and wait for an answer
 //   on: { copy(url), share(url), resetLink() -> Promise<newUrl>, join(friend), remove(friend) -> Promise|void, wardrobe(),
+//         rename(typed) -> Promise<{ name, note } | { error }>,   the pencil by the name; without it there is no pencil
 //         accept(req) -> Promise<friend|void>,          resolve with the new friend to list it at once
 //         decline(req) -> Promise|void },                a decline is silent: the other player is never told
 //   tab: "card" | "items" | "friends",                 the first tab on phones (PC always shows the card)
@@ -33,7 +34,7 @@ export async function open(opts = {}) {
     catch { /* no WebGL or no three: pixel beans instead */ }
   }
   const tid = nextId("pf");
-  const L = layer({ cls: "scr-profile scr-veil", labelledby: tid, settings: o.settings, escape: () => done() });
+  const L = layer({ cls: "scr-profile scr-veil", labelledby: tid, settings: o.settings, escape: () => (editing ? stopEdit() : done()) });
   L.el.innerHTML = `<div class="scr-pf scr-plate">
       <header class="scr-pf-head"><div><span class="scr-eyebrow">Profile</span><h2 class="scr-title small" id="${tid}">Your player card</h2></div>
         <button class="scr-tile" data-close aria-label="Close profile"><img src="${uiIcon("close")}" alt=""></button></header>
@@ -52,6 +53,15 @@ export async function open(opts = {}) {
     return `<span class="scr-pf-face">${bean(BEAN_COLORS[i % 8], { size: Math.max(2, Math.round(size / 18)) })}</span>`;
   };
 
+  // ---- the name: the pencil turns it into a box; Enter or the tick saves it, Escape or the cross keeps the old one ----
+  let editing = false, saving = false;
+  const nameRow = () => editing
+    ? `<form class="scr-pf-rename" novalidate><input class="scr-input" name="n" maxlength="16" autocomplete="nickname" spellcheck="false" aria-label="Your new name" value="${esc(o.player.name)}">
+        <button class="scr-tile" type="submit" aria-label="Save the new name"><img src="${uiIcon("check")}" alt=""></button>
+        <button class="scr-tile" type="button" data-act="rename-cancel" aria-label="Keep your name"><img src="${uiIcon("close")}" alt=""></button></form>`
+    : `<div class="scr-pf-namerow"><p class="scr-pf-name">${esc(o.player.name)}</p>${o.on.rename
+        ? `<button class="scr-tile scr-pf-pencil" data-act="rename" aria-label="Change your name"><img src="${icon("pencil")}" alt=""></button>` : ""}</div>`;
+
   // ---- the player card ----
   const drawCard = () => {
     const s = o.stats || {}, played = s.played || 0, wins = s.wins || 0, rate = played ? Math.round((wins / played) * 100) : 0;
@@ -62,7 +72,7 @@ export async function open(opts = {}) {
     }).join("");
     L.$(".scr-pf-card").innerHTML = `<div class="scr-pf-me scr-plate gold">
         ${imgFace(null, o.player.look, 0, 160)}
-        <div class="scr-pf-id"><p class="scr-pf-name">${esc(o.player.name)}</p>
+        <div class="scr-pf-id">${nameRow()}<p class="scr-pf-namenote" role="status"></p>
           ${o.on.wardrobe ? `<button class="scr-tile" data-act="wardrobe"><img src="${uiIcon("hanger")}" alt=""><span>Wardrobe</span></button>` : ""}</div>
       </div>
       <dl class="scr-pf-stats"><div><dt>Games</dt><dd>${played}</dd></div><div><dt>Wins</dt><dd>${wins}</dd></div><div><dt>Win rate</dt><dd>${rate}%</dd></div></dl>
@@ -152,7 +162,9 @@ export async function open(opts = {}) {
       if (!ok) return;
       const next = await o.on.resetLink?.();
       if (typeof next === "string") { o.friendLink = next; drawFriends(); flash("Here is your new link."); }
-    } else if (act === "wardrobe") { o.on.wardrobe?.(); }
+    } else if (act === "rename") startEdit();
+    else if (act === "rename-cancel") stopEdit();
+    else if (act === "wardrobe") { o.on.wardrobe?.(); }
     else if (t.dataset.join) { const f = o.friends.find((x) => x.id === t.dataset.join); if (f) o.on.join?.(f); }
     else if (t.dataset.accept || t.dataset.decline) {
       const yes = !!t.dataset.accept, id = t.dataset.accept || t.dataset.decline, r = (o.requests || []).find((x) => x.id === id);
@@ -174,12 +186,32 @@ export async function open(opts = {}) {
     }
   });
 
+  const nameNote = (text, bad) => { const el = L.$(".scr-pf-namenote"); if (el) { el.textContent = text; el.classList.toggle("bad", !!bad); } };
+  function startEdit() { editing = true; drawCard(); const i = L.$(".scr-pf-rename input"); i.focus(); i.select(); }
+  function stopEdit(note = "") { editing = false; drawCard(); nameNote(note); L.$(".scr-pf-pencil")?.focus(); }
+  L.el.addEventListener("submit", async (e) => {
+    const f = e.target.closest(".scr-pf-rename");
+    if (!f) return;
+    e.preventDefault();
+    if (saving) return;
+    if (f.n.value.trim() === o.player.name) return stopEdit();
+    saving = true;
+    f.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    let r;
+    try { r = await o.on.rename(f.n.value); } catch { r = { error: "That did not work. Try again." }; }
+    saving = false;
+    if (!current) return;   // the profile closed while it was saving
+    if (r?.error) { f.querySelectorAll("button").forEach((b) => (b.disabled = false)); nameNote(r.error, true); f.n.focus(); return; }
+    o.player = { ...o.player, name: r.name };
+    stopEdit(r.note || "Name saved.");
+  });
+
   let resolve;
   const promise = new Promise((r) => (resolve = r));
   const done = () => { if (!current) return; current = null; mq.removeEventListener("change", onMq); L.close(); resolve(); };
   current = {
     promise, close: done,
-    update(p = {}) { Object.assign(o, p); if (p.player || p.stats) drawCard(); if (p.friends || p.requests || p.friendLink !== undefined) drawFriends(); if (p.owned || p.player) drawItems(); },
+    update(p = {}) { Object.assign(o, p); if ((p.player || p.stats) && !editing) drawCard(); if (p.friends || p.requests || p.friendLink !== undefined) drawFriends(); if (p.owned || p.player) drawItems(); },
   };
   drawCard(); drawFriends(); drawItems(); showTab(tab);
   L.focus(L.$("[data-close]"));

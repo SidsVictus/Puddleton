@@ -1,6 +1,6 @@
 // Offline-first cache for the app shell: every file the game needs is on this site (no CDNs), so it is all
 // precached at install. Calls to the game server and to Cloudflare Turnstile are other origins and never cached.
-const CACHE = "puddleton-fable-v18";
+const CACHE = "puddleton-fable-v19";
 const SCREENS = ["agegate", "base", "battery", "confirm", "credits", "loading", "overlays", "phrasewheel", "prefs", "profile", "report", "roomlist", "sanction", "settings", "tips"];
 const SHELL = [
   "./", "index.html", "play.html", "play.js", "start.mjs", "quality.mjs", "net.mjs", "config.mjs", "phrases.mjs", "style.css", "world.mjs", "stage.mjs",
@@ -10,7 +10,7 @@ const SHELL = [
   "brand/favicon-32.png", "brand/favicon-48.png", "brand/apple-touch-icon.png", "brand/icon-192.png", "brand/icon-512.png", "brand/icon-maskable-512.png",
   "brand/logo-359.png", "brand/logo-359.webp", "brand/logo-718.png", "brand/logo-718.webp", "brand/logo-1436.webp",
   "screens/screens.css", ...SCREENS.map((s) => `screens/${s}.mjs`),
-  ...["block", "bubble", "chevron", "copy", "ferry", "flag", "gear", "link", "mute", "nosignal", "people", "person", "refresh", "wrench"].flatMap((i) => [`screens/icons/${i}.svg`, `screens/icons/low/${i}.svg`]),
+  ...["block", "bubble", "chevron", "copy", "ferry", "flag", "gear", "link", "mute", "nosignal", "pencil", "people", "person", "refresh", "wrench"].flatMap((i) => [`screens/icons/${i}.svg`, `screens/icons/low/${i}.svg`]),
   ...["back", "book", "check", "clock", "close", "crown", "door", "hanger", "help", "hourglass", "moon", "plate-gold", "plate-rose", "plate-teal", "plate", "share", "skull", "slot-focus", "slot", "sun", "tile-gold", "tile"].flatMap((i) => [`ui/${i}.svg`, `ui/low/${i}.svg`]), "ui/low/lock.svg",
   ...["book", "clock", "crown", "lock", "skull"].map((i) => `ui/low/sm/${i}.svg`), ...["chevron", "refresh"].map((i) => `screens/icons/low/sm/${i}.svg`),
   ...["boutique", "dock", "finale", "market", "rooftops", "square", "study", "woods"].flatMap((s) => [`scenes/${s}.svg`, `scenes/low/${s}.svg`]),

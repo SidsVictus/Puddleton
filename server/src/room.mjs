@@ -346,9 +346,11 @@ export class Room extends DurableObject {
     this.lastMsg.set(gid, now);
     this.clearTimer("idle");
     if (this.isGm(gid)) this.clearTimer("gm");
-    // Remember the name and look for the profile card (only when they changed: one row write).
-    if (s.id && (guest.name !== s.id || guest.look !== JSON.stringify(s.look))) {
-      this.ctx.waitUntil(db.run(this.env, this.usage, "UPDATE guests SET name = ?, look = ?, last_seen = ? WHERE gid = ?", s.id, JSON.stringify(s.look), now, gid).catch(() => {}));
+    // Remember the name and look for the profile card (only when they changed: one row write). The name only on joining,
+    // so a reconnect does not undo a new name picked with the profile card's pencil while seated.
+    const name = fresh || !guest.name ? s.id : guest.name;
+    if (s.id && (guest.name !== name || guest.look !== JSON.stringify(s.look))) {
+      this.ctx.waitUntil(db.run(this.env, this.usage, "UPDATE guests SET name = ?, look = ?, last_seen = ? WHERE gid = ?", name, JSON.stringify(s.look), now, gid).catch(() => {}));
     }
     send(ws, { t: "welcome", code: m.code, cls: m.cls === "kids" ? "kids" : "13+", you: this.you(s), serverNow: now, protocol: PROTOCOL });
     if (this.g) {

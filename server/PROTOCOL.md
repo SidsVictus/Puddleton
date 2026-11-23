@@ -83,6 +83,12 @@ a room (`""` and `null` before that). `stats` as in `/profile`. `sanction` is `n
 `{ "type": "ban"|"mute", "reason", "until", "appeal" }`. Use it at start up to check the guest still works
 (a `401` means make a new guest).
 
+### `POST /me/name` (auth)
+The pencil on the profile card. Body `{ "name" }`. The same check as a room `hello` (no slurs, nothing sexual, no
+links; for the child band also no contact details), then the name is cut to letters, digits and `_`, at most 16.
+`200 { "name" }` with the name as stored, or `400 E_NAME`. Friends lists and `GET /me` show it at once; a room the
+player is already in keeps their seat name, and the next room they join uses the new one.
+
 ### `POST /me/delete` (auth)
 "Clear my data" in the settings. Body `{}`. Deletes the guest and everything that belongs to it: the guest row (name,
 look, stats, device token), its friendships both ways, friend requests either way, its friend link, and blocks it made

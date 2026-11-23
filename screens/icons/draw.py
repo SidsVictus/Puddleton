@@ -22,6 +22,19 @@ def tooth(cx, cy, r0, r1, w, deg):
     return poly(*pts)
 
 
+def slab(p0, p1, w):
+    """A straight bar w wide from p0 to p1, with square ends (line() rounds them)."""
+    (x0, y0), (x1, y1) = p0, p1
+    d = math.hypot(x1 - x0, y1 - y0)
+    nx, ny = -(y1 - y0) / d * w / 2, (x1 - x0) / d * w / 2
+    return poly((x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny))
+
+
+def pixels(rows):
+    """A 16 x 16 pixel map (one palette letter per pixel, . for none) as shapes, for Low art drawn pixel by pixel."""
+    return [(ch, rect(2 * x, 2 * y, 2 * x + 2, 2 * y + 2)) for y, row in enumerate(rows) for x, ch in enumerate(row) if ch != "."]
+
+
 ICONS = {
     "gear": [("a", circle(16, 16, 10.5))] + [("a", tooth(16, 16, 8, 14.6, 5.6, k * 45)) for k in range(8)] + [
         ("d", circle(16, 16, 6.6)),
@@ -86,6 +99,14 @@ ICONS = {
         ("a", circle(16, 10, 6)),
         ("a", rect(6, 18, 26, 29.5, 5)),
     ],
+    "pencil": [   # the profile card's change-your-name button: wood tip, lead, body with a shaded side, band, eraser
+        ("m", poly((13.3, 24.3), (7.7, 18.7), (4.5, 27.5))),
+        ("k", poly((4.5, 27.5), (8, 26.2), (5.8, 24))),
+        ("a", slab((10.5, 21.5), (21.5, 10.5), 8)),
+        ("d", slab((12.4, 23.4), (23.4, 12.4), 2.6)),
+        ("p", slab((21.5, 10.5), (24, 8), 8)),
+        ("r", slab((24, 8), (27, 5), 8)),
+    ],
     "ferry": [
         ("m", rect(9, 9, 23, 17)),
         ("t", rect(11, 11, 14, 14)), ("t", rect(18, 11, 21, 14)),
@@ -125,6 +146,24 @@ LOW_FIX = {
         ("p", circle(16, 24, 3)),
         ("r", line((5, 5), (27, 27), w=4)),
     ],
+    "pencil": pixels([   # a diagonal is cleaner placed by hand than snapped
+        "................",
+        ".............rr.",
+        "...........rrrr.",
+        "..........pppp..",
+        ".........aaad...",
+        "........aaad....",
+        ".......aaad.....",
+        "......aaad......",
+        ".....aaad.......",
+        "....aaad........",
+        "...aaad.........",
+        "..mmm...........",
+        ".mm.............",
+        ".k..............",
+        "................",
+        "................",
+    ]),
     "ferry": [
         ("m", rect(8, 8, 24, 18)),
         ("t", rect(10, 10, 14, 14)), ("t", rect(18, 10, 22, 14)),

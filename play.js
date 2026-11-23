@@ -1385,6 +1385,17 @@ async function openProfile() {
         join: (f) => { profile.close(); if (f.room?.code && needName()) joinCode(f.room.code); },
         remove: (f) => call("POST", "/friends/remove", { gid: f.id }).catch(() => toast("Could not remove that friend right now.")),
         wardrobe: () => { profile.close(); openWardrobe(); },
+        // The pencil by the name: the server checks it like a room would and keeps it for friends lists and /me.
+        rename: async (typed) => {
+          const n = typed.trim().replace(/\s+/g, "");
+          if (!nameOk(n)) return { error: "Letters, numbers and _ only, up to 16." };
+          let r;
+          try { r = await call("POST", "/me/name", { name: n }); }
+          catch (e) { return { error: e.code === "E_NAME" || e.code === "E_NET" ? e.message : "Could not save your name right now. Try again." }; }
+          app.name = r.name; $("#nameInput").value = r.name; if (app.me) app.me.name = r.name;
+          try { localStorage.setItem("pad-name", r.name); } catch { /* blocked */ }
+          return { name: r.name, note: app.code ? "Name saved. This room keeps your seat name; the next room uses the new one." : "Name saved." };
+        },
         accept: async (r) => { const res = await call("POST", "/friends/accept", { gid: r.id }); return friendOf({ ...res.friend, online: false, room: null }); },
         decline: (r) => call("POST", "/friends/decline", { gid: r.id }),
       },

@@ -125,6 +125,16 @@ async function route(req, env, url, path, origin) {
       sanction: ban ? { type: "ban", reason: ban.reason, until: ban.until, appeal: APPEAL } : mute ? { type: "mute", reason: mute.reason, until: mute.until, appeal: APPEAL } : null });
   }
 
+  // A new name from the pencil on the profile card. The same check as a room hello; a room the player is already in
+  // keeps their seat name, and the next room they join uses this one.
+  if (path === "/me/name" && method === "POST") {
+    const b = await readBody(req), child = me.band === "child";
+    const typed = typeof b?.name === "string" ? b.name.slice(0, 64) : "", id = typed.replace(/[^A-Za-z0-9_]/g, "").slice(0, 16);
+    if (!id || !checkName(typed, { child }).ok || !checkName(id, { child }).ok) return E("E_NAME", 400, "Please pick a different name.");
+    if (id !== me.name) await db.run(env, pending, "UPDATE guests SET name = ? WHERE gid = ?", id, me.gid);
+    return J({ name: id });
+  }
+
   // Clear my data: removes the guest and everything that belongs to it. Sanctions and reports stay (bans keep
   // matching the device, moderators keep their records); match logs keep their own 30 day purge (other players' data).
   if (path === "/me/delete" && method === "POST") {
