@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+mly31C+QQSAeXrtrKLIXFjPzAin+3Nu2O5/lqJcZv8=' 'sha256-SNQKU5HW9rXAEiM3V69xGaCcFAcQRSdXtWu4m3hd/0g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+mly31C+QQSAeXrtrKLIXFjPzAin+3Nu2O5/lqJcZv8=' 'sha256-G6OiDRLheXIPoZsKh2WY+nYg12GTjX/3XsgGyFmgi88='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#0e0b24">
 <title>Puddleton</title>
 <meta name="description" content="A cute, thrilling pixel Mafia party game set on floating islands. Free on every phone and PC.">
@@ -143,7 +143,10 @@ const chapters = [...document.querySelectorAll(".chapter")], pips = [...document
 // The camera holds on each chapter's island for the first half of the chapter, while its words are read, then flies to
 // the next. (Moving at a steady pace, it was always between islands, and on narrow upright screens the island slid off the side.)
 const dwell = (u) => { const i = Math.floor(u); return Math.min(SHOTS.length - 1, i + THREE.MathUtils.smoothstep(u - i, 0.5, 1)); };
-ScrollTrigger.create({ trigger: "#story", start: "top top", end: "bottom bottom", onUpdate: (st) => { state.p = dwell(Math.max(0, st.scroll() - st.start) / chapters[0].offsetHeight); } });
+// On phones and tablets the camera keeps a steady pace instead, from the top of the story to the bottom:
+// holding still made every swipe feel like the page was stuck.
+const touch = matchMedia("(pointer: coarse)").matches;
+ScrollTrigger.create({ trigger: "#story", start: "top top", end: "bottom bottom", onUpdate: (st) => { state.p = touch ? st.progress * (SHOTS.length - 1) : dwell(Math.max(0, st.scroll() - st.start) / chapters[0].offsetHeight); } });
 chapters.forEach((ch, i) => {
   const parts = ch.querySelectorAll(".eyebrow, h1, h2, p");
   if (i) gsap.set(parts, { opacity: 0, y: 36 });
