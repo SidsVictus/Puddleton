@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+mly31C+QQSAeXrtrKLIXFjPzAin+3Nu2O5/lqJcZv8=' 'sha256-hVt/GtBO71Eh5N3B5FeBHmxA31RhC+btywwGh83HSl0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+mly31C+QQSAeXrtrKLIXFjPzAin+3Nu2O5/lqJcZv8=' 'sha256-SNQKU5HW9rXAEiM3V69xGaCcFAcQRSdXtWu4m3hd/0g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#0e0b24">
 <title>Puddleton</title>
 <meta name="description" content="A cute, thrilling pixel Mafia party game set on floating islands. Free on every phone and PC.">
@@ -59,10 +59,10 @@
   <div class="dither"></div>
   <span class="eyebrow">Four ways to play</span>
   <ol class="mode-list">
-    <li><b>Classic</b>Five timeless roles. The game everyone knows.</li>
-    <li><b>Crazy</b>All ten roles. Framers, jesters, pure chaos.</li>
-    <li><b>Gore</b>Cute beans, gruesome bedtime tales.</li>
-    <li><b>Speed</b>Lightning timers. Whole games in minutes.</li>
+    <li><b>Classic</b><span>Five timeless roles. The game everyone knows.</span></li>
+    <li><b>Crazy</b><span>All ten roles. Framers, jesters, pure chaos.</span></li>
+    <li><b>Gore</b><span>Cute beans, gruesome bedtime tales.</span></li>
+    <li><b>Speed</b><span>Lightning timers. Whole games in minutes.</span></li>
   </ol>
   <p class="facts">4 to 16 players. Free on every phone and PC.</p>
   <a class="btn big" href="play.html">Begin the night</a>
@@ -102,8 +102,19 @@ const at = (p) => {
   return { pos: new THREE.QuadraticBezierCurve3(a.pos, via, b.pos).getPoint(t), look: a.look.clone().lerp(b.look, t) };
 };
 const state = { p: 0 }, cur = { pos: SHOTS[0].pos.clone(), look: SHOTS[0].look.clone() }, glow = (p, c) => Math.max(0, 1 - Math.abs(p - c) / 0.8);
-w.onFit = (cw, ch) => { if (cw > 1024) w.camera.setViewOffset(cw, ch, -cw * 0.17, 0, cw, ch); else w.camera.clearViewOffset(); };
+// Wide screens and phones held sideways: words on the left, the island to the right. Held upright: the words sit at the
+// bottom, so the island is lifted into the clear sky between the top bar and the words, and the dark band behind the
+// words (--words in style.css) ends where they begin. Measured, so it fits every screen and text size.
+const copies = [...document.querySelectorAll(".copy")];
+w.onFit = (cw, ch) => {
+  w.camera.zoom = cw > ch ? Math.min(1, cw / ch / 1.6) : 1;   // squarer screens held sideways (tablets) see the island as a 16:10 screen does, clear of the words
+  if (cw > 1024 || cw > ch) { document.documentElement.style.removeProperty("--words"); return w.camera.setViewOffset(cw, ch, -cw * 0.17, 0, cw, ch); }
+  const top = Math.min(...copies.map((c) => c.firstElementChild.offsetTop));   // where the tallest chapter's words begin
+  document.documentElement.style.setProperty("--words", `${Math.round(ch - top)}px`);
+  w.camera.setViewOffset(cw, ch, 0, Math.max(0, ch / 2 - (72 + top - 90) / 2), cw, ch);
+};
 w.onFit(innerWidth, innerHeight);
+document.fonts?.ready.then(() => w.onFit(innerWidth, innerHeight));   // the pixel font changes how tall the words are
 w.ticks.push((t, dt) => {
   const s = at(state.p), k = 1 - Math.exp(-dt * 2.5);
   cur.pos.lerp(s.pos, k); cur.look.lerp(s.look, k); w.camera.position.copy(cur.pos); w.camera.lookAt(cur.look);
@@ -114,14 +125,25 @@ w.ticks.push((t, dt) => {
 });
 
 const TIPS = {"villager":"Town. No powers, just a big heart and a sharp vote.","angel":"Town. Each night, shields one person and saves them before they die.","detective":"Town. Each night, inspects one person and learns if they are mafia or innocent.","vigilante":"Town. Each night, may take a shot at someone. Aim carefully.","mayor":"Town. Their day vote counts twice.","mafia":"Mafia. Picks a victim each night with the crew, then blends in by day.","godfather":"Mafia. The boss: their pick is final, and they look innocent to the Detective.","framer":"Mafia. Frames someone so the Detective sees them as mafia.","jester":"Wildcard. Wins alone if the town votes them out.","serialkiller":"Wildcard. Strikes every night and wins as the last one standing."};
-document.getElementById("cast").innerHTML = [["villager", "Villager"], ["angel", "Angel"], ["detective", "Detective"], ["vigilante", "Vigilante"], ["mayor", "Mayor"], ["mafia", "Mafia"], ["godfather", "Godfather"], ["framer", "Framer"], ["jester", "Jester"], ["serialkiller", "Serial Killer"]]
-  .map(([r, n], i) => `<figure tabindex="0" data-tip="${TIPS[r]}"><img class="bean" alt="" width="170" height="170" src="${portrait(r, BEAN_COLORS[i % 8])}"><figcaption>${n}</figcaption></figure>`).join("");
+const cast = document.getElementById("cast");
+cast.innerHTML = [["villager", "Villager"], ["angel", "Angel"], ["detective", "Detective"], ["vigilante", "Vigilante"], ["mayor", "Mayor"], ["mafia", "Mafia"], ["godfather", "Godfather"], ["framer", "Framer"], ["jester", "Jester"], ["serialkiller", "Serial Killer"]]
+  .map(([r, n]) => `<figure tabindex="0" data-tip="${TIPS[r]}"><img class="bean" alt="" width="170" height="170" data-role="${r}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"><figcaption>${n}</figcaption></figure>`).join("");
+// The cast portraits are drawn just before the cast scrolls into view, not while the page is opening (each is a 3D render).
+const castIo = new IntersectionObserver(([e]) => {
+  if (!e.isIntersecting) return;
+  castIo.disconnect();
+  cast.querySelectorAll("img[data-role]").forEach((img, i) => { img.src = portrait(img.dataset.role, BEAN_COLORS[i % 8]); });
+}, { rootMargin: "100% 0px" });
+castIo.observe(cast);
 
 gsap.registerPlugin(ScrollTrigger);
 const lenis = new Lenis({ duration: 1.6, lerp: 0.045 }); lenis.on("scroll", ScrollTrigger.update);
 gsap.ticker.add((time) => lenis.raf(time * 1000)); gsap.ticker.lagSmoothing(0);
 const chapters = [...document.querySelectorAll(".chapter")], pips = [...document.querySelectorAll("#rail i")];
-ScrollTrigger.create({ trigger: "#story", start: "top top", end: "bottom bottom", onUpdate: (st) => { state.p = st.progress * (SHOTS.length - 1); } });
+// The camera holds on each chapter's island for the first half of the chapter, while its words are read, then flies to
+// the next. (Moving at a steady pace, it was always between islands, and on narrow upright screens the island slid off the side.)
+const dwell = (u) => { const i = Math.floor(u); return Math.min(SHOTS.length - 1, i + THREE.MathUtils.smoothstep(u - i, 0.5, 1)); };
+ScrollTrigger.create({ trigger: "#story", start: "top top", end: "bottom bottom", onUpdate: (st) => { state.p = dwell(Math.max(0, st.scroll() - st.start) / chapters[0].offsetHeight); } });
 chapters.forEach((ch, i) => {
   const parts = ch.querySelectorAll(".eyebrow, h1, h2, p");
   if (i) gsap.set(parts, { opacity: 0, y: 36 });
@@ -131,7 +153,13 @@ chapters.forEach((ch, i) => {
   } });
 });
 gsap.from("#cast figure", { opacity: 0, y: 30, stagger: 0.1, duration: 0.9, ease: "steps(9)", scrollTrigger: { trigger: "#cast", start: "top 80%" } });
-ScrollTrigger.create({ trigger: ".finale", start: "top 85%", onToggle: (st) => (document.getElementById("rail").style.opacity = st.isActive ? 0 : 1) });
+// past the story: hide the chapter dots and give the top bar a backing so text never runs under it
+const rail = document.getElementById("rail"), hud = document.querySelector(".hud");
+const pastStory = (on) => { rail.style.opacity = on ? 0 : 1; hud.classList.toggle("solid", on); };
+ScrollTrigger.create({ trigger: ".finale", start: "top 85%", onEnter: () => pastStory(true), onLeaveBack: () => pastStory(false) });
+// The finale's background turns solid 16% of the way down. Once that part covers the screen, the island is hidden:
+// stop drawing it until the reader scrolls back. (Half a screen past the story was too late on tablets and computers.)
+ScrollTrigger.create({ trigger: ".finale", start: "16% top", onEnter: () => w.run(false), onLeaveBack: () => w.run(true) });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 </script>
 </body>

@@ -154,9 +154,8 @@ dialog#manual { border: 0; padding: 0; background: transparent; color: var(--tex
 @media (max-width: 600px) { .mirror canvas { width: 210px; height: 210px; } .swatches { grid-template-columns: repeat(3, 1fr); } .swatch img.bean { width: 76px; height: 76px; } .swatch { font-size: 12px; } }
 @media (max-width: 1000px) { .stage { grid-template-columns: 1fr; } .lobby { grid-template-columns: 1fr; } .msgs { height: 30vh; } }
 @media (max-width: 800px) {
-  .scrim { background: linear-gradient(0deg, rgba(14, 11, 36, .97), rgba(14, 11, 36, .86) 44%, transparent 72%); }
-  .copy { max-width: none; justify-content: flex-end; padding-bottom: 12vh; } .rail { display: none; }
-  .cast-grid { grid-template-columns: repeat(3, 1fr); } .mode-list li { grid-template-columns: 36px 1fr; } .mode-list li b { grid-column: 2; }
+  .rail { display: none; }
+  .cast-grid { grid-template-columns: repeat(3, 1fr); } .mode-list li { grid-template-columns: 36px 1fr; } .mode-list li b, .mode-list li span { grid-column: 2; }
   .page dl { grid-template-columns: 1fr; } .diorama { height: 28vh; } .screen { padding-top: calc(28vh - 50px); } .phase { top: 9vh; } .mark b { display: none; }
 }
 
@@ -171,10 +170,20 @@ dialog#manual { border: 0; padding: 0; background: transparent; color: var(--tex
 /* ---------- tablet and phone (up to 1024px): text at the bottom, full width, nothing overflows ---------- */
 .copy, .finale { box-sizing: border-box; }
 .cast-grid .bean { width: 100%; max-width: 170px; height: auto; }
-@media (max-width: 1024px) {
-  .scrim { background: linear-gradient(0deg, rgba(14, 11, 36, .97), rgba(14, 11, 36, .88) 40%, rgba(14, 11, 36, .2) 66%, transparent 78%); }
+/* Held upright: the words sit at the bottom and the dark band stays behind them only (--words is their height from the
+   bottom, measured by the page, which also lifts the island into the clear sky above). It never dims the island. */
+@media (max-width: 1024px) and (orientation: portrait) {
+  .scrim { background: linear-gradient(0deg, rgba(14, 11, 36, .95), rgba(14, 11, 36, .86) var(--words, 42%), transparent calc(var(--words, 42%) + 90px)); }
   .copy { max-width: none; width: 100%; justify-content: flex-end; padding: 0 6vw 12vh; box-sizing: border-box; }
   .copy p { max-width: 60ch; }
+}
+/* Held sideways: words on the left and the island on the right, as on a computer. Short phone screens get a little
+   more room and smaller words so a chapter fits without scrolling. */
+@media (max-width: 1024px) and (orientation: landscape) and (max-height: 560px) {
+  .copy { max-width: min(560px, 54vw); padding-top: 64px; }
+  .copy h1 { font-size: clamp(40px, 7vw, 64px); } .copy h2 { font-size: clamp(24px, 3.8vw, 36px); } .copy p { font-size: 15px; line-height: 1.5; }
+}
+@media (max-width: 1024px) {
   .rail { display: none; }
   .finale { padding: 14vh 6vw 10vh; }
   .cast-grid { grid-template-columns: repeat(3, 1fr); gap: 28px 12px; }
@@ -193,8 +202,9 @@ dialog#manual { border: 0; padding: 0; background: transparent; color: var(--tex
   .gate-title { font-size: clamp(60px, 20vw, 100px); }
 }
 
-/* header stays readable over scrolling content */
+/* header stays readable over scrolling content, and turns solid past the story (index.html adds .solid) */
 .landing .hud { background: linear-gradient(180deg, rgba(14, 11, 36, .92), rgba(14, 11, 36, .6) 60%, transparent); padding-bottom: 26px; }
+.landing .hud.solid { background: linear-gradient(180deg, rgba(14, 11, 36, .97), rgba(14, 11, 36, .94) 72%, transparent); }
 
 /* safety net: nothing may widen the page past the screen (Android zooms out to fit overflow) */
 html, body { max-width: 100%; overflow-x: clip; }
@@ -584,7 +594,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 
 /* the live town stage, the emote bar and the player strip */
 .stage-wrap { position: relative; width: 100%; aspect-ratio: 16 / 10; padding: 0; overflow: hidden; }
-.stage-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: auto; touch-action: none; }
+.stage-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: auto; touch-action: pan-y; }
 .emotes { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 10px 0 4px; }
 .emote { display: grid; justify-items: center; gap: 2px; min-width: 52px; min-height: 44px; padding: 4px 6px; font-size: 11px; color: var(--dim); background: rgba(14, 11, 36, .82); box-shadow: 0 0 0 2px #2a2350; }
 .emote img { width: 28px; height: 28px; image-rendering: pixelated; } .emote:hover, .emote:active { color: var(--moon); box-shadow: 0 0 0 2px var(--amber); }

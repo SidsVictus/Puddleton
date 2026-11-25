@@ -156,6 +156,7 @@ function show(id) {
   $$(".screen").forEach((s) => s.classList.toggle("active", s.id === id));
   if (id !== "game") setScene(SCENES[id] || null);
   if (id !== "wardrobe") { mirror.run(false); previewTok++; wstage?.run(false); }
+  stage?.run(id === "game");   // the town only draws while the game screen is up
   if (id !== "game") document.body.classList.remove("replaying");
   updateHud();
   if (moved) scrollTo(0, 0);

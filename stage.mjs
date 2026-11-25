@@ -157,7 +157,7 @@ const col = (c) => (colorCache[c] ||= new THREE.Color(c));
 export function createStage(canvas, options = {}) {
   const opt = { wander: true, onTap: null, ...options };
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }), sharp = sharpness(), pass = pixelPass(renderer);
-  canvas.style.touchAction = "none";
+  canvas.style.touchAction = "pan-y";   // a thumb swipe up or down still scrolls the page on phones; dragging sideways turns the town
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, 1, 0.3, 900);
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
   let W = 1, H = 1, tanV = 0.34, tanH = 0.34, disposed = false;
@@ -1447,7 +1447,7 @@ export function createStage(canvas, options = {}) {
     ptr.lx = e.clientX;
   };
   const onUp = (e) => { if (!ptr || e.pointerId !== ptr.id) return; const moved = ptr.moved; ptr = null; if (!moved) tap(e.clientX, e.clientY); else if (!cur) snapYaw(); };   // a drag settles on the nearest gap between houses
-  const onCancel = () => { ptr = null; };
+  const onCancel = () => { if (ptr?.moved && !cur) snapYaw(); ptr = null; };   // the browser took the swipe as a scroll
   canvas.addEventListener("pointerdown", onDown); canvas.addEventListener("pointermove", onMove); canvas.addEventListener("pointerup", onUp); canvas.addEventListener("pointercancel", onCancel);
 
   // ---------- the frame ----------
