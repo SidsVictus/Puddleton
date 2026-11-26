@@ -17,3 +17,11 @@ export const started = showLoading(async (report) => {
   report(done / total, next());
   await Promise.all(tasks.map(async (t) => { await t.run(); left.delete(t); done += t.weight ?? 1; report(done / total, next()); }));
 }, { label: "Loading the island" });
+
+// The rest of the game starts once the loading screen has been drawn: starting it takes over half a second on phones,
+// and the screen (and Android's app opening screen before it) waited for that. Browsers that cannot tell when the first
+// picture was drawn wait one frame; a page opened in the background starts after a second and a half.
+let go = () => { go = () => {}; import("./play.js"); };
+if (PerformanceObserver.supportedEntryTypes?.includes("paint")) new PerformanceObserver((l) => l.getEntriesByName("first-contentful-paint").length && go()).observe({ type: "paint", buffered: true });
+else requestAnimationFrame(() => setTimeout(() => go()));
+setTimeout(() => go(), 1500);

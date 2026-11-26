@@ -1,6 +1,6 @@
 // Offline-first cache for the app shell: every file the game needs is on this site (no CDNs), so it is all
 // precached at install. Calls to the game server and to Cloudflare Turnstile are other origins and never cached.
-const CACHE = "puddleton-fable-v19";
+const CACHE = "puddleton-fable-v21";
 const SCREENS = ["agegate", "base", "battery", "confirm", "credits", "loading", "overlays", "phrasewheel", "prefs", "profile", "report", "roomlist", "sanction", "settings", "tips"];
 const SHELL = [
   "./", "index.html", "play.html", "play.js", "start.mjs", "quality.mjs", "net.mjs", "config.mjs", "phrases.mjs", "style.css", "world.mjs", "stage.mjs",
@@ -20,12 +20,15 @@ const SHELL = [
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", (e) => e.waitUntil(
   caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
+// Files come from this copy first, so the installed app opens at once (asking the network for every file first kept
+// Android's opening screen up for seconds). A new version of the game needs a new CACHE name: the browser then sees
+// this file changed, fetches the new files in the background, and the next launch uses them.
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== self.location.origin) return;   // the API, Turnstile: straight to the network
-  e.respondWith(
+  e.respondWith(caches.match(e.request, { ignoreSearch: url.pathname.endsWith("play.html") }).then((hit) => hit ||
     fetch(e.request).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
       return res;
-    }).catch(() => caches.match(e.request, { ignoreSearch: url.pathname.endsWith("play.html") })));
+    })));
 });
